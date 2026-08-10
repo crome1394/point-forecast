@@ -444,7 +444,15 @@ class NwsApi(
 
         val sun = SunCalculator.times(latitude, longitude)
         val days = buildDays(periods, sun.sunrise, sun.sunset)
-        val hourly = mergeTides(parseHourly(digital, grid), tides.heightByEpochHour)
+        // Anchor hourly timeline to MapClick period starts — digitalJSON time/unixtime
+        // labels are often wrong (e.g. "6 pm" + bad unix for data that is actually 10 pm).
+        val hourlyAnchorEpochSec = periods.firstOrNull()?.startTimeIso
+            ?.let { parseIso(it)?.time }
+            ?.let { it / 1000L }
+        val hourly = mergeTides(
+            parseHourly(digital, grid, hourlyAnchorEpochSec),
+            tides.heightByEpochHour,
+        )
         val mapClickHazards = parseMapClickHazards(data)
         val hazards = mergeHazards(apiAlerts, mapClickHazards)
         val tideInfo = tides.station?.let { st ->
@@ -553,7 +561,22 @@ class NwsApi(
         return result
     }
 
-    private fun parseHourly(digital: JSONObject?, grid: GridSeries): List<HourlyRow> {
+    /**
+     * Parse MapClick digitalJSON hourly rows.
+     *
+     * NWS digitalJSON often ships **incorrect** `time` labels and `unixtime` values
+     * (e.g. PoP sequence that weather.gov shows at 10pm–midnight labeled "6 pm"–"8 pm"
+     * with unix stamps a day later). PoP / temp / humidity arrays are correct in order.
+     *
+     * We therefore re-stamp hours as a continuous series starting at
+     * [hourlyAnchorEpochSec] (MapClick first period startValidTime), which matches
+     * weather.gov's Hour (EDT) row and api.weather.gov forecastHourly.
+     */
+    private fun parseHourly(
+        digital: JSONObject?,
+        grid: GridSeries,
+        hourlyAnchorEpochSec: Long?,
+    ): List<HourlyRow> {
         if (digital == null) return emptyList()
         val rows = mutableListOf<HourlyRow>()
         val skip = setOf(
@@ -561,24 +584,9 @@ class NwsApi(
             "credit", "moreInformation", "location", "PeriodNumberList", "PeriodNameList",
         )
 
-        // Prefer declared period order when available
-        val orderedKeys = mutableListOf<String>()
-        digital.optJSONArray("PeriodNameList")?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val name = arr.optString(i)
-                // digitalJSON uses camel keys like ThisAfternoon, FridayNight
-                val key = name.replace(" ", "")
-                if (digital.has(key)) orderedKeys += key
-                else if (digital.has(name)) orderedKeys += name
-            }
-        }
-        if (orderedKeys.isEmpty()) {
-            val keys = digital.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                if (key !in skip) orderedKeys += key
-            }
-        }
+        val orderedKeys = digitalPeriodKeys(digital, skip)
+        // Continuous hour cursor — digital periods are contiguous hourly slots
+        var nextEpoch = hourlyAnchorEpochSec
 
         for (key in orderedKeys) {
             if (key in skip) continue
@@ -597,13 +605,16 @@ class NwsApi(
             val periodName = humanizePeriodName(period.optString("periodName", key))
 
             for (i in 0 until times.length()) {
-                val tLabel = times.optString(i)
                 val temp = optInt(temps, i)
                 val rh = optInt(humidity, i)
                 val wspd = optInt(winds, i)
                 val digitalGust = optInt(gusts, i)
 
-                val epochSec = optLong(unix, i)
+                // Prefer anchored timeline; fall back to (unreliable) unixtime only if needed
+                val epochSec = nextEpoch ?: optLong(unix, i)
+                if (epochSec != null) {
+                    nextEpoch = epochSec + 3600L
+                }
                 val epochHour = epochSec?.let { (it / 3600L) * 3600L }
 
                 val gridGust = epochHour?.let { grid.gustMph[it]?.roundToInt() }
@@ -620,8 +631,7 @@ class NwsApi(
                 }
 
                 val pop = optInt(pops, i)
-                // Show amount only when there is measurable QPF or a non-zero PoP with QPF data
-                val amount = precipIn
+                val tLabel = epochSec?.let { formatHourClock(it) } ?: times.optString(i)
 
                 rows += HourlyRow(
                     periodLabel = periodName,
@@ -630,7 +640,7 @@ class NwsApi(
                     feelsLikeF = WeatherMath.feelsLikeF(temp, rh, wspd),
                     dewPointF = dew,
                     popPct = pop,
-                    precipIn = amount,
+                    precipIn = precipIn,
                     cloudCoverPct = optInt(clouds, i),
                     humidityPct = rh,
                     windSpeedMph = wspd,
@@ -644,6 +654,50 @@ class NwsApi(
         }
 
         return rows.sortedBy { it.epochSec ?: Long.MAX_VALUE }
+    }
+
+    /** Ordered digitalJSON period object keys (Tonight, Monday, …). */
+    private fun digitalPeriodKeys(digital: JSONObject, skip: Set<String>): List<String> {
+        val orderedKeys = mutableListOf<String>()
+        // PeriodNameList may be a JSON array or an object keyed "0","1",…
+        digital.optJSONArray("PeriodNameList")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val name = arr.optString(i)
+                val key = name.replace(" ", "")
+                if (digital.has(key)) orderedKeys += key
+                else if (digital.has(name)) orderedKeys += name
+            }
+        }
+        if (orderedKeys.isEmpty()) {
+            digital.optJSONObject("PeriodNameList")?.let { obj ->
+                val idxs = obj.keys().asSequence().mapNotNull { it.toIntOrNull() }.sorted()
+                for (i in idxs) {
+                    val name = obj.optString(i.toString())
+                    if (name.isBlank()) continue
+                    val key = name.replace(" ", "")
+                    if (digital.has(key)) orderedKeys += key
+                    else if (digital.has(name)) orderedKeys += name
+                }
+            }
+        }
+        if (orderedKeys.isEmpty()) {
+            val keys = digital.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key !in skip && digital.optJSONObject(key)?.optJSONArray("time") != null) {
+                    orderedKeys += key
+                }
+            }
+        }
+        return orderedKeys
+    }
+
+    /** Local clock label for an epoch second (device default zone — same as hourly UI). */
+    private fun formatHourClock(epochSec: Long): String {
+        val fmt = SimpleDateFormat("h a", Locale.US)
+        return fmt.format(Date(epochSec * 1000L))
+            .replace("AM", "am")
+            .replace("PM", "pm")
     }
 
     private fun optInt(arr: JSONArray?, index: Int): Int? {

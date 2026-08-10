@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Hourly times misaligned vs weather.gov: MapClick `digitalJSON` ships incorrect `time` / `unixtime` labels (e.g. peak PoP shown at 7–9 pm that weather.gov has at 10 pm–midnight). Hourly rows are now anchored to MapClick `startValidTime` and stepped hourly so **Precipitation chance** matches the NWS digital table.
+
 ## [1.0.2] — 2026-08-09
 
 ### Fixed
