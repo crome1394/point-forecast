@@ -26,9 +26,9 @@ so they display correctly on de-Googled devices such as **CalyxOS**.
 | | |
 |---|---|
 | **Releases page** | [github.com/crome1394/forecast-point/releases](https://github.com/crome1394/forecast-point/releases) |
-| **Direct APK (v1.0.1)** | [ForecastPoint-1.0.1.apk](https://github.com/crome1394/forecast-point/releases/download/v1.0.1/ForecastPoint-1.0.1.apk) |
+| **Direct APK (v1.0.2)** | [ForecastPoint-1.0.2.apk](https://github.com/crome1394/forecast-point/releases/download/v1.0.2/ForecastPoint-1.0.2.apk) |
 
-> The direct link works **after** you publish a release named `v1.0.1` and attach the file `ForecastPoint-1.0.1.apk` (see below).
+> The direct link works **after** you publish a release named `v1.0.2` and attach the file `ForecastPoint-1.0.2.apk` (see below).
 
 ### Install on Android
 
@@ -39,7 +39,7 @@ so they display correctly on de-Googled devices such as **CalyxOS**.
 Or from a computer:
 
 ```bash
-adb install -r ForecastPoint-1.0.1.apk
+adb install -r ForecastPoint-1.0.2.apk
 ```
 
 ### Does the file have to be named `app-debug.apk`?
@@ -53,7 +53,7 @@ forecast-point/app/build/outputs/apk/debug/app-debug.apk
 For distribution, rename it to something clear, for example:
 
 ```text
-ForecastPoint-1.0.1.apk
+ForecastPoint-1.0.2.apk
 ```
 
 ### Publish a release (recommended)
@@ -66,22 +66,22 @@ cd ~/src/noaa/forecast-point
 
 # Friendly name for the release asset
 mkdir -p ../dist
-cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.1.apk
+cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.2.apk
 ```
 
 Then on GitHub:
 
 1. Open **https://github.com/crome1394/forecast-point/releases/new**
-2. **Choose a tag:** `v1.0.1` (create new tag on publish, target `main`)
-3. **Release title:** `Forecast Point 1.0.1`
-4. Paste notes from [CHANGELOG.md](CHANGELOG.md) (1.0.1 section)
-5. **Attach** `dist/ForecastPoint-1.0.1.apk` (drag and drop)
+2. **Choose a tag:** `v1.0.2` (create new tag on publish, target `main`)
+3. **Release title:** `Forecast Point 1.0.2`
+4. Paste notes from [CHANGELOG.md](CHANGELOG.md) (1.0.2 section)
+5. **Attach** `dist/ForecastPoint-1.0.2.apk` (drag and drop)
 6. Publish release
 
 The direct download URL will be:
 
 ```text
-https://github.com/crome1394/forecast-point/releases/download/v1.0.1/ForecastPoint-1.0.1.apk
+https://github.com/crome1394/forecast-point/releases/download/v1.0.2/ForecastPoint-1.0.2.apk
 ```
 
 ## Features
@@ -138,8 +138,8 @@ forecast-point/app/build/outputs/apk/debug/app-debug.apk
 Rename for sharing (optional but recommended):
 
 ```bash
-cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.1.apk
-adb install -r ../dist/ForecastPoint-1.0.1.apk
+cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.2.apk
+adb install -r ../dist/ForecastPoint-1.0.2.apk
 ```
 
 > **Note:** This build is a *debug* APK (fine for personal/sideload use). A signed *release* build is better for wider distribution; that needs a keystore you keep private.
