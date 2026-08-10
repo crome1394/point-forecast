@@ -52,8 +52,9 @@ class NwsApi(
             val gridDeferred = async {
                 runCatching { fetchGridSeries(latitude, longitude) }.getOrDefault(GridSeries.EMPTY)
             }
+            // null = request failed; empty list = no active alerts (authoritative)
             val alertsDeferred = async {
-                runCatching { fetchActiveAlerts(latitude, longitude) }.getOrDefault(emptyList())
+                runCatching { fetchActiveAlerts(latitude, longitude) }.getOrNull()
             }
             val tidesDeferred = async {
                 runCatching {
@@ -251,6 +252,12 @@ class NwsApi(
         return (h + if (m > 0) 1 else 0).coerceAtLeast(1)
     }
 
+    /**
+     * Active CAP alerts from api.weather.gov for a point.
+     * Returns an empty list when there are no alerts (not null).
+     * Throws on network / parse failure so the caller can distinguish failure
+     * from “no alerts.”
+     */
     private fun fetchActiveAlerts(latitude: Double, longitude: Double): List<WeatherHazard> {
         val lat = String.format(Locale.US, "%.4f", latitude)
         val lon = String.format(Locale.US, "%.4f", longitude)
@@ -263,9 +270,12 @@ class NwsApi(
                 val feature = features.optJSONObject(i) ?: continue
                 val props = feature.optJSONObject("properties") ?: continue
                 val event = props.optString("event").takeIf { it.isNotBlank() } ?: continue
-                // Skip test / special products that aren't real hazards
+                // Skip test / non-alert products (HWO is a routine discussion, not a WWA)
                 val status = props.optString("status")
                 if (status.equals("Test", ignoreCase = true)) continue
+                if (isNonAlertProduct(event)) continue
+                val messageType = props.optString("messageType")
+                if (messageType.equals("Cancel", ignoreCase = true)) continue
                 val desc = props.optString("description").takeIf { it.isNotBlank() }
                 val instruction = props.optString("instruction").takeIf { it.isNotBlank() }
                 val headline = props.optString("headline").takeIf { it.isNotBlank() }
@@ -294,7 +304,12 @@ class NwsApi(
         return buildList {
             for (i in 0 until names.length()) {
                 val event = names.optString(i).takeIf { it.isNotBlank() } ?: continue
-                val url = urls?.optString(i)?.takeIf { it.isNotBlank() }
+                // MapClick often lists "Hazardous Weather Outlook" even when there is
+                // no active watch/warning/advisory — do not surface those as hazards.
+                if (isNonAlertProduct(event)) continue
+                val url = urls?.optString(i)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.replace("&amp;", "&")
                 add(
                     WeatherHazard(
                         event = event,
@@ -310,19 +325,38 @@ class NwsApi(
         }
     }
 
+    /**
+     * Prefer CAP active alerts. Only fall back to MapClick when the API request
+     * failed — an empty CAP result means "no alerts," not "use MapClick."
+     */
     private fun mergeHazards(
-        apiAlerts: List<WeatherHazard>,
+        apiAlerts: List<WeatherHazard>?,
         mapClick: List<WeatherHazard>,
     ): List<WeatherHazard> {
-        if (apiAlerts.isNotEmpty()) return apiAlerts
+        if (apiAlerts != null) return apiAlerts
         return mapClick
+    }
+
+    /**
+     * Products that appear in MapClick / CAP but are routine discussions or
+     * non-WWA outlooks — not actionable watches, warnings, or advisories.
+     */
+    private fun isNonAlertProduct(event: String): Boolean {
+        val e = event.trim().lowercase(Locale.US)
+        if (e.isEmpty() || e == "null" || e == "none") return true
+        return e.contains("hazardous weather outlook") ||
+            e.contains("hydrologic outlook") ||
+            e.contains("weather outlook") ||
+            e == "hwo" ||
+            e.contains("area forecast discussion") ||
+            e.contains("public information statement")
     }
 
     private fun parseSnapshot(
         root: JSONObject,
         digital: JSONObject?,
         grid: GridSeries,
-        apiAlerts: List<WeatherHazard>,
+        apiAlerts: List<WeatherHazard>?,
         tides: TideService.TideResult,
         latitude: Double,
         longitude: Double,

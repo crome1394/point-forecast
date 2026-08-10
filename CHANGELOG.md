@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- False hazard banner: MapClick’s routine **Hazardous Weather Outlook** was shown as an active alert when `api.weather.gov` correctly reported none. Prefer CAP active alerts; only fall back to MapClick on API failure, and filter non-alert products (HWO, hydrologic outlook, etc.).
+
 ## [1.0.1] — 2026-08-07
 
 ### Fixed

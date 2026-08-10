@@ -32,8 +32,29 @@ class WeatherRepository(
     val preferences get() = prefs
 
     suspend fun bootstrap() {
-        _snapshot.value = prefs.getSnapshotOnce()
+        // Drop stale non-alert products (e.g. Hazardous Weather Outlook) from cache
+        // so a false banner does not linger until the next network refresh.
+        _snapshot.value = prefs.getSnapshotOnce()?.let { sanitizeHazards(it) }
         WeatherUpdateScheduler.reconcile(context)
+    }
+
+    /** Remove routine outlook products that must not be shown as active hazards. */
+    private fun sanitizeHazards(snap: WeatherSnapshot): WeatherSnapshot {
+        if (snap.hazards.isEmpty()) return snap
+        val cleaned = snap.hazards.filterNot { isNonAlertProduct(it.event) }
+        if (cleaned.size == snap.hazards.size) return snap
+        return snap.copy(hazards = cleaned)
+    }
+
+    private fun isNonAlertProduct(event: String): Boolean {
+        val e = event.trim().lowercase()
+        if (e.isEmpty() || e == "null" || e == "none") return true
+        return e.contains("hazardous weather outlook") ||
+            e.contains("hydrologic outlook") ||
+            e.contains("weather outlook") ||
+            e == "hwo" ||
+            e.contains("area forecast discussion") ||
+            e.contains("public information statement")
     }
 
     suspend fun refreshActive(manual: Boolean = false): WeatherSnapshot? {
