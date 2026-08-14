@@ -4,7 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Bundle
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -62,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import com.crome.forecastpoint.R
 import com.crome.forecastpoint.data.GeocodeResult
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
@@ -106,10 +110,11 @@ private val CartoLightTiles: OnlineTileSourceBase = object : XYTileSource(
 
 /**
  * Map picker:
- * - Tap places a pin; city-name chip appears — tap chip to accept.
+ * - Tap places a **red selection pin**; city-name chip appears — tap chip to accept.
+ * - GPS shows a distinct **blue “you are here” pin** that stays on the map and
+ *   updates as the device moves (never removed by choosing a location).
  * - FAB (bottom-right) toggles search overlay.
  * - Search defaults to **top** unless [searchAtBottom] is true (settings).
- * - One-finger pan; GPS centers on open (no chip until user picks).
  */
 @Composable
 fun MapScreen(
@@ -132,14 +137,35 @@ fun MapScreen(
     var searchVisible by remember { mutableStateOf(false) }
     var resolving by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<GeocodeResult?>(null) }
+    var locationPermitted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED,
+        )
+    }
 
     val mapView = remember {
         createMapView(context, initialLat, initialLon, initialZoom)
     }
+    // Red teardrop — chosen weather location (tap / search)
     val selectionMarker = remember {
         Marker(mapView).apply {
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             title = "Selected"
+            id = "selection"
+            ContextCompat.getDrawable(context, R.drawable.ic_map_selection_pin)?.let { icon = it }
+        }
+    }
+    // Blue GPS disk — device position only (persistent while map is open)
+    val myLocationMarker = remember {
+        Marker(mapView).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            title = "My location"
+            id = "my_location"
+            setInfoWindow(null)
+            ContextCompat.getDrawable(context, R.drawable.ic_map_my_location)?.let { icon = it }
         }
     }
 
@@ -147,15 +173,33 @@ fun MapScreen(
         mapView.controller.animateTo(GeoPoint(lat, lon), zoom, 600L)
     }
 
-    fun placeMarker(lat: Double, lon: Double) {
-        mapView.overlays.removeAll { it is Marker }
+    /** Ensure my-location marker is on the map (without touching selection). */
+    fun ensureMyLocationMarkerVisible() {
+        if (!mapView.overlays.contains(myLocationMarker)) {
+            mapView.overlays.add(myLocationMarker)
+        }
+    }
+
+    fun updateMyLocationPin(lat: Double, lon: Double, fly: Boolean = false) {
+        myLocationMarker.position = GeoPoint(lat, lon)
+        ensureMyLocationMarkerVisible()
+        if (fly) {
+            flyTo(lat, lon, mapView.zoomLevelDouble.coerceAtLeast(11.0))
+        }
+        mapView.invalidate()
+    }
+
+    /** Place / move the red selection pin only (does not remove GPS pin). */
+    fun placeSelectionMarker(lat: Double, lon: Double) {
+        mapView.overlays.removeAll { it is Marker && it.id == "selection" }
         selectionMarker.position = GeoPoint(lat, lon)
         mapView.overlays.add(selectionMarker)
+        ensureMyLocationMarkerVisible()
         mapView.invalidate()
     }
 
     fun selectPoint(lat: Double, lon: Double, known: GeocodeResult? = null) {
-        placeMarker(lat, lon)
+        placeSelectionMarker(lat, lon)
         flyTo(lat, lon, mapView.zoomLevelDouble.coerceAtLeast(10.0))
         if (known != null) {
             pending = known
@@ -179,15 +223,12 @@ fun MapScreen(
         }
     }
 
-    fun centerOnMyLocation() {
+    fun centerOnMyLocation(fly: Boolean = true) {
         locating = true
-        pending = null
-        mapView.overlays.removeAll { it is Marker }
-        mapView.invalidate()
         val loc = lastKnownLocation(context)
         if (loc != null) {
-            flyTo(loc.latitude, loc.longitude, 11.0)
-            status = "Centered on your location — tap the map to drop a pin"
+            updateMyLocationPin(loc.latitude, loc.longitude, fly = fly)
+            status = "Blue pin = your location · Tap the map to pick a weather spot"
             locating = false
         } else {
             status = "Location unavailable — enable GPS or pick on map"
@@ -199,8 +240,10 @@ fun MapScreen(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { grants ->
         if (grants.values.any { it }) {
-            centerOnMyLocation()
+            locationPermitted = true
+            centerOnMyLocation(fly = true)
         } else {
+            locationPermitted = false
             status = "Location permission denied — search or tap the map"
             locating = false
             if (initialZoom >= 6.0) {
@@ -220,7 +263,7 @@ fun MapScreen(
             Manifest.permission.ACCESS_COARSE_LOCATION,
         ) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
-            centerOnMyLocation()
+            centerOnMyLocation(fly = true)
         } else {
             if (initialZoom >= 6.0) {
                 flyTo(initialLat, initialLon, initialZoom)
@@ -235,11 +278,58 @@ fun MapScreen(
         }
     }
 
+    // Map lifecycle (resume/pause always while this screen is composed)
     DisposableEffect(Unit) {
         mapView.onResume()
         onDispose {
             mapView.onPause()
             mapView.onDetach()
+        }
+    }
+
+    // Live GPS updates for the blue pin while permitted + map open
+    DisposableEffect(locationPermitted) {
+        if (!locationPermitted) {
+            return@DisposableEffect onDispose { }
+        }
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                updateMyLocationPin(location.latitude, location.longitude, fly = false)
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+
+            override fun onProviderEnabled(provider: String) = Unit
+            override fun onProviderDisabled(provider: String) = Unit
+        }
+        try {
+            val providers = buildList {
+                if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    add(LocationManager.GPS_PROVIDER)
+                }
+                if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    add(LocationManager.NETWORK_PROVIDER)
+                }
+            }
+            for (p in providers) {
+                lm.requestLocationUpdates(
+                    p,
+                    /* minTimeMs = */ 4_000L,
+                    /* minDistanceM = */ 8f,
+                    listener,
+                    Looper.getMainLooper(),
+                )
+            }
+        } catch (_: SecurityException) {
+            // Permission revoked mid-session
+        }
+        onDispose {
+            try {
+                lm.removeUpdates(listener)
+            } catch (_: Exception) {
+            }
         }
     }
 

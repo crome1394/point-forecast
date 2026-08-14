@@ -44,12 +44,14 @@ fun SettingsScreen(
     widgetShowHighLow: Boolean,
     mapSearchAtBottom: Boolean,
     expandCurrentConditions: Boolean,
+    showTidesTab: Boolean,
     onAutoUpdateChange: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
     onTitleBarAtBottomChange: (Boolean) -> Unit,
     onWidgetShowHighLowChange: (Boolean) -> Unit,
     onMapSearchAtBottomChange: (Boolean) -> Unit,
     onExpandCurrentConditionsChange: (Boolean) -> Unit,
+    onShowTidesTabChange: (Boolean) -> Unit,
     onManualRefresh: () -> Unit,
 ) {
     Column(
@@ -111,6 +113,33 @@ fun SettingsScreen(
             Switch(
                 checked = expandCurrentConditions,
                 onCheckedChange = onExpandCurrentConditionsChange,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(SurfaceDark)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Show tides in hourly", color = Color.White, fontSize = 16.sp)
+                Text(
+                    if (showTidesTab) {
+                        "Tides tab appears on the Hourly screen (when a station is nearby)"
+                    } else {
+                        "Tides tab is hidden — useful inland"
+                    },
+                    color = OnSurfaceMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            Switch(
+                checked = showTidesTab,
+                onCheckedChange = onShowTidesTabChange,
             )
         }
 

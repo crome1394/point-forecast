@@ -28,6 +28,7 @@ class PreferencesRepository(private val context: Context) {
     private val keyWidgetShowHighLow = booleanPreferencesKey("widget_show_high_low")
     private val keyMapSearchBottom = booleanPreferencesKey("map_search_at_bottom")
     private val keyExpandCurrentConditions = booleanPreferencesKey("expand_current_conditions")
+    private val keyShowTidesTab = booleanPreferencesKey("show_tides_tab")
 
     val autoUpdateEnabled: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoUpdate] ?: true }
@@ -59,6 +60,13 @@ class PreferencesRepository(private val context: Context) {
      */
     val expandCurrentConditions: Flow<Boolean> =
         context.dataStore.data.map { it[keyExpandCurrentConditions] ?: false }
+
+    /**
+     * When true (default), the Hourly screen includes the Tides tab.
+     * Inland users can turn this off.
+     */
+    val showTidesTab: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowTidesTab] ?: true }
 
     val favorites: Flow<List<SavedLocation>> =
         context.dataStore.data.map { prefs ->
@@ -104,6 +112,10 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setExpandCurrentConditions(expand: Boolean) {
         context.dataStore.edit { it[keyExpandCurrentConditions] = expand }
+    }
+
+    suspend fun setShowTidesTab(show: Boolean) {
+        context.dataStore.edit { it[keyShowTidesTab] = show }
     }
 
     suspend fun setActiveLocationId(id: String?) {

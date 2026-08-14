@@ -72,6 +72,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -113,6 +114,7 @@ class MainActivity : ComponentActivity() {
                 val widgetShowHighLow by viewModel.widgetShowHighLow.collectAsState()
                 val mapSearchAtBottom by viewModel.mapSearchAtBottom.collectAsState()
                 val expandCurrentConditions by viewModel.expandCurrentConditions.collectAsState()
+                val showTidesTab by viewModel.showTidesTab.collectAsState()
 
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -179,6 +181,13 @@ class MainActivity : ComponentActivity() {
                 fun openMap() {
                     screen = AppScreen.Map
                     scope.launch { drawerState.close() }
+                }
+
+                fun openRadar() {
+                    val url = snapshot?.let {
+                        RadarUrl.forCoordinates(it.latitude, it.longitude)
+                    } ?: RadarUrl.generic()
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 }
 
                 // Long-press menu: Rename or Remove
@@ -315,6 +324,14 @@ class MainActivity : ComponentActivity() {
                                             IconButton(onClick = { openAddCity() }) {
                                                 Icon(Icons.Filled.Search, contentDescription = "Add City")
                                             }
+                                            IconButton(onClick = { openRadar() }) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_radar_colorful),
+                                                    contentDescription = "National Weather Radar",
+                                                    // Keep multicolor drawable as-authored
+                                                    tint = Color.Unspecified,
+                                                )
+                                            }
                                             IconButton(onClick = { viewModel.manualRefresh() }) {
                                                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                                             }
@@ -366,6 +383,13 @@ class MainActivity : ComponentActivity() {
                                                     tint = Color.White,
                                                 )
                                             }
+                                            IconButton(onClick = { openRadar() }) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_radar_colorful),
+                                                    contentDescription = "National Weather Radar",
+                                                    tint = Color.Unspecified,
+                                                )
+                                            }
                                             IconButton(onClick = { viewModel.manualRefresh() }) {
                                                 Icon(
                                                     Icons.Filled.Refresh,
@@ -396,18 +420,11 @@ class MainActivity : ComponentActivity() {
                                     onDayClick = { screen = AppScreen.Hourly },
                                     onAddCity = { openAddCity() },
                                     onOpenMap = { openMap() },
-                                    onOpenRadar = {
-                                        val url = snapshot?.let {
-                                            RadarUrl.forCoordinates(it.latitude, it.longitude)
-                                        } ?: RadarUrl.generic()
-                                        startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-                                        )
-                                    },
                                 )
                                 AppScreen.Hourly -> HourlyScreen(
                                     hourly = snapshot?.hourly.orEmpty(),
                                     tideInfo = snapshot?.tideInfo,
+                                    showTidesTab = showTidesTab,
                                 )
                                 AppScreen.Search -> SearchScreen(
                                     results = searchResults,
@@ -439,6 +456,7 @@ class MainActivity : ComponentActivity() {
                                     widgetShowHighLow = widgetShowHighLow,
                                     mapSearchAtBottom = mapSearchAtBottom,
                                     expandCurrentConditions = expandCurrentConditions,
+                                    showTidesTab = showTidesTab,
                                     onAutoUpdateChange = { viewModel.setAutoUpdate(it) },
                                     onIntervalChange = { viewModel.setIntervalMinutes(it) },
                                     onTitleBarAtBottomChange = { viewModel.setTitleBarAtBottom(it) },
@@ -447,6 +465,7 @@ class MainActivity : ComponentActivity() {
                                     onExpandCurrentConditionsChange = {
                                         viewModel.setExpandCurrentConditions(it)
                                     },
+                                    onShowTidesTabChange = { viewModel.setShowTidesTab(it) },
                                     onManualRefresh = {
                                         viewModel.manualRefresh()
                                         screen = AppScreen.Forecast

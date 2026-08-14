@@ -7,6 +7,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- App bar **radar** control (colorful icon next to Refresh) opens National Weather Radar for the active location; large in-feed radar button removed
+- Settings → **Show tides in hourly** (default on) to hide the Tides tab when not needed
+- Map **blue GPS pin** for your live position (stays while choosing a location; red pin is the weather pick)
+
 ### Fixed
 
 - Hourly times misaligned vs weather.gov: MapClick `digitalJSON` ships incorrect `time` / `unixtime` labels (e.g. peak PoP shown at 7–9 pm that weather.gov has at 10 pm–midnight). Hourly rows are now anchored to MapClick `startValidTime` and stepped hourly so **Precipitation chance** matches the NWS digital table.

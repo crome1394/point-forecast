@@ -43,6 +43,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     val mapSearchAtBottom = prefs.mapSearchAtBottom.stateIn(viewModelScope, share, false)
     val expandCurrentConditions =
         prefs.expandCurrentConditions.stateIn(viewModelScope, share, false)
+    val showTidesTab = prefs.showTidesTab.stateIn(viewModelScope, share, true)
 
     private val _searchResults = MutableStateFlow<List<GeocodeResult>>(emptyList())
     val searchResults: StateFlow<List<GeocodeResult>> = _searchResults.asStateFlow()
@@ -190,6 +191,12 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     fun setExpandCurrentConditions(expand: Boolean) {
         viewModelScope.launch {
             prefs.setExpandCurrentConditions(expand)
+        }
+    }
+
+    fun setShowTidesTab(show: Boolean) {
+        viewModelScope.launch {
+            prefs.setShowTidesTab(show)
         }
     }
 

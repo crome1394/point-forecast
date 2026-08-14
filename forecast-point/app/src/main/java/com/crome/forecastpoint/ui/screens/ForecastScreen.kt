@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.WbSunny
@@ -71,7 +70,6 @@ fun ForecastScreen(
     onOpenHourly: () -> Unit,
     onDayClick: (DayForecast) -> Unit,
     onAddCity: () -> Unit = {},
-    onOpenRadar: () -> Unit = {},
     onOpenMap: () -> Unit = {},
 ) {
     Box(
@@ -100,9 +98,6 @@ fun ForecastScreen(
                         snapshot = snapshot,
                         expandByDefault = expandCurrentConditions,
                     )
-                }
-                item(key = "radar") {
-                    RadarLinkButton(onClick = onOpenRadar)
                 }
                 if (error != null) {
                     item(key = "error") {
@@ -162,54 +157,6 @@ fun ForecastScreen(
                     .padding(top = 8.dp)
                     .size(24.dp),
                 strokeWidth = 2.dp,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RadarLinkButton(onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1565C0)),
-        shape = RoundedCornerShape(8.dp),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Radar,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f, fill = false)) {
-                Text(
-                    text = "National Weather Radar",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                )
-                Text(
-                    text = "Centered on this location",
-                    color = Color(0xFFBBDEFB),
-                    fontSize = 12.sp,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = "Opens in browser",
-                tint = Color(0xFFBBDEFB),
-                modifier = Modifier.size(16.dp),
             )
         }
     }

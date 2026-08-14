@@ -90,12 +90,20 @@ private val ConditionsWhite = Color(0xFFF5F5F5)
 fun HourlyScreen(
     hourly: List<HourlyRow>,
     tideInfo: TideInfo? = null,
+    showTidesTab: Boolean = true,
 ) {
-    val tabs = HourlyTab.entries
+    val tabs = remember(showTidesTab) {
+        if (showTidesTab) {
+            HourlyTab.entries
+        } else {
+            HourlyTab.entries.filter { it != HourlyTab.Tides }
+        }
+    }
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
-    val tabModels = remember(hourly) { buildTabModels(hourly) }
-
+    val tabModels = remember(hourly, showTidesTab) {
+        buildTabModels(hourly, includeTides = showTidesTab)
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -146,7 +154,7 @@ fun HourlyScreen(
             return
         }
 
-        if (pagerState.currentPage == HourlyTab.Tides.ordinal) {
+        if (showTidesTab && tabs.getOrNull(pagerState.currentPage) == HourlyTab.Tides) {
             TideStationBar(tideInfo)
         }
 
@@ -259,10 +267,13 @@ private fun popColor(pop: Int?): Color {
     return lerpColor(Color(0xFF90CAF9), Color(0xFF1565C0), f)
 }
 
-private fun buildTabModels(hourly: List<HourlyRow>): List<TabModel> {
+private fun buildTabModels(
+    hourly: List<HourlyRow>,
+    includeTides: Boolean = true,
+): List<TabModel> {
     if (hourly.isEmpty()) return emptyList()
     val times = hourly.map { formatTimeLabel(it) }
-    return listOf(
+    val models = mutableListOf(
         TabModel(
             headers = listOf("Temperature", "Feels Like", "Dew Point"),
             rows = hourly.mapIndexed { i, row ->
@@ -318,7 +329,9 @@ private fun buildTabModels(hourly: List<HourlyRow>): List<TabModel> {
                 )
             },
         ),
-        TabModel(
+    )
+    if (includeTides) {
+        models += TabModel(
             headers = listOf("Height", "Trend"),
             rows = hourly.mapIndexed { i, row ->
                 val trendColor = when (row.tideTrend) {
@@ -337,17 +350,18 @@ private fun buildTabModels(hourly: List<HourlyRow>): List<TabModel> {
                     ),
                 )
             },
-        ),
-        TabModel(
-            headers = listOf("Conditions"),
-            rows = hourly.mapIndexed { i, row ->
-                HourlyTableRow(
-                    time = times[i],
-                    cells = listOf(ColoredCell(row.weather, ConditionsWhite)),
-                )
-            },
-        ),
+        )
+    }
+    models += TabModel(
+        headers = listOf("Conditions"),
+        rows = hourly.mapIndexed { i, row ->
+            HourlyTableRow(
+                time = times[i],
+                cells = listOf(ColoredCell(row.weather, ConditionsWhite)),
+            )
+        },
     )
+    return models
 }
 
 @Composable
