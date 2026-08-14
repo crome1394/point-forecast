@@ -21,10 +21,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -485,13 +489,19 @@ fun MapScreen(
             )
         }
 
-        // Search at BOTTOM (settings)
+        // Search at BOTTOM (settings) — lift above IME so the keyboard never covers the field
+        val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+        val keyboardOpen = imeBottom > 0.dp
+        // When keyboard is open, only a small gap above it; when closed, clear the FAB
+        val bottomSearchClearance = if (keyboardOpen) 8.dp else 80.dp
+
         AnimatedVisibility(
             visible = searchVisible && searchAtBottom,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(bottom = 80.dp) // clear of FAB
+                .imePadding()
+                .padding(bottom = bottomSearchClearance)
                 .zIndex(2f),
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it },
@@ -516,6 +526,7 @@ fun MapScreen(
                 results = results,
                 searching = searching,
                 locating = locating,
+                resultsAboveField = true, // results grow upward, above the input
                 onResultClick = { r ->
                     query = r.name
                     results = emptyList()
@@ -533,11 +544,12 @@ fun MapScreen(
             )
         }
 
-        // FAB always on top of map
+        // FAB lifts with the keyboard so it does not cover the bottom search field
         FloatingActionButton(
             onClick = { searchVisible = !searchVisible },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .imePadding()
                 .padding(16.dp)
                 .zIndex(5f),
             containerColor = PrimaryBlue,
@@ -600,13 +612,45 @@ private fun MapSearchBar(
     onResultClick: (GeocodeResult) -> Unit,
     onMyLocationClick: () -> Unit,
     onClose: () -> Unit,
+    /** When true (bottom search), list suggestions above the field so they stay visible over the keyboard. */
+    resultsAboveField: Boolean = false,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(SurfaceDark.copy(alpha = 0.96f))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-    ) {
+    @Composable
+    fun ResultsBlock() {
+        if (searching) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(20.dp),
+                strokeWidth = 2.dp,
+                color = PrimaryBlue,
+            )
+        }
+        if (results.isNotEmpty()) {
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 180.dp)
+                    .padding(vertical = 4.dp),
+                reverseLayout = resultsAboveField,
+            ) {
+                items(results, key = { "${it.latitude},${it.longitude},${it.name}" }) { r ->
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onResultClick(r) }
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                    ) {
+                        Text(r.name, color = Color.White, fontSize = 15.sp)
+                        Text(r.displayName, color = OnSurfaceMuted, fontSize = 11.sp, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun FieldRow() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = query,
@@ -647,40 +691,23 @@ private fun MapSearchBar(
                 Icon(Icons.Filled.Close, contentDescription = "Hide search", tint = OnSurfaceMuted)
             }
         }
+    }
 
-        if (searching) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .padding(8.dp)
-                    .height(20.dp),
-                strokeWidth = 2.dp,
-                color = PrimaryBlue,
-            )
-        }
-
-        if (results.isNotEmpty()) {
-            LazyColumn(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 180.dp)
-                    .padding(top = 4.dp),
-            ) {
-                items(results, key = { "${it.latitude},${it.longitude},${it.name}" }) { r ->
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onResultClick(r) }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                    ) {
-                        Text(r.name, color = Color.White, fontSize = 15.sp)
-                        Text(r.displayName, color = OnSurfaceMuted, fontSize = 11.sp, maxLines = 1)
-                    }
-                }
-            }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceDark.copy(alpha = 0.96f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        if (resultsAboveField) {
+            ResultsBlock()
+            FieldRow()
+        } else {
+            FieldRow()
+            ResultsBlock()
         }
     }
 }
-
 private fun createMapView(
     context: Context,
     lat: Double,
