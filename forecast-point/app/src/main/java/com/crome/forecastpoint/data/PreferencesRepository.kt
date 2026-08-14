@@ -30,6 +30,10 @@ class PreferencesRepository(private val context: Context) {
     private val keyExpandCurrentConditions = booleanPreferencesKey("expand_current_conditions")
     private val keyShowTidesTab = booleanPreferencesKey("show_tides_tab")
     private val keyShowSpaceWeather = booleanPreferencesKey("show_space_weather")
+    private val keyShowAirQuality = booleanPreferencesKey("show_air_quality")
+    private val keyShowVisibility = booleanPreferencesKey("show_visibility")
+    private val keyShowPressure = booleanPreferencesKey("show_pressure")
+    private val keyShowUvIndex = booleanPreferencesKey("show_uv_index")
 
     val autoUpdateEnabled: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoUpdate] ?: true }
@@ -75,6 +79,18 @@ class PreferencesRepository(private val context: Context) {
      */
     val showSpaceWeather: Flow<Boolean> =
         context.dataStore.data.map { it[keyShowSpaceWeather] ?: true }
+
+    val showAirQuality: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowAirQuality] ?: true }
+
+    val showVisibility: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowVisibility] ?: true }
+
+    val showPressure: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowPressure] ?: true }
+
+    val showUvIndex: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowUvIndex] ?: true }
 
     val favorites: Flow<List<SavedLocation>> =
         context.dataStore.data.map { prefs ->
@@ -128,6 +144,22 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setShowSpaceWeather(show: Boolean) {
         context.dataStore.edit { it[keyShowSpaceWeather] = show }
+    }
+
+    suspend fun setShowAirQuality(show: Boolean) {
+        context.dataStore.edit { it[keyShowAirQuality] = show }
+    }
+
+    suspend fun setShowVisibility(show: Boolean) {
+        context.dataStore.edit { it[keyShowVisibility] = show }
+    }
+
+    suspend fun setShowPressure(show: Boolean) {
+        context.dataStore.edit { it[keyShowPressure] = show }
+    }
+
+    suspend fun setShowUvIndex(show: Boolean) {
+        context.dataStore.edit { it[keyShowUvIndex] = show }
     }
 
     suspend fun setActiveLocationId(id: String?) {

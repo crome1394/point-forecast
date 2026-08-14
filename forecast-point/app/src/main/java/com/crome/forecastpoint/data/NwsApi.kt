@@ -25,6 +25,7 @@ import kotlin.math.roundToInt
 class NwsApi(
     private val client: OkHttpClient = defaultClient(),
     private val tideService: TideService? = null,
+    private val openMeteoService: OpenMeteoService? = OpenMeteoService(),
 ) {
     suspend fun fetchWeather(
         latitude: Double,
@@ -61,6 +62,12 @@ class NwsApi(
                     tideService?.fetchHourlyTides(latitude, longitude) ?: TideService.TideResult.EMPTY
                 }.getOrDefault(TideService.TideResult.EMPTY)
             }
+            val extrasDeferred = async {
+                runCatching {
+                    openMeteoService?.fetchExtras(latitude, longitude)
+                        ?: OpenMeteoService.HourlyExtras.EMPTY
+                }.getOrDefault(OpenMeteoService.HourlyExtras.EMPTY)
+            }
 
             parseSnapshot(
                 root = forecastDeferred.await(),
@@ -68,6 +75,7 @@ class NwsApi(
                 grid = gridDeferred.await(),
                 apiAlerts = alertsDeferred.await(),
                 tides = tidesDeferred.await(),
+                extras = extrasDeferred.await(),
                 latitude = latitude,
                 longitude = longitude,
                 preferredName = preferredName,
@@ -346,7 +354,18 @@ class NwsApi(
             transform = { c -> WeatherMath.celsiusToF(c).toDouble() },
             splitAcrossHours = false,
         )
-        return GridSeries(qpfInches = qpfByEpoch, gustMph = gustByEpoch, dewPointF = dewByEpoch)
+        // Visibility in meters → miles
+        val visByEpoch = expandGridSeries(
+            props.optJSONObject("visibility")?.optJSONArray("values"),
+            transform = { m -> WeatherMath.metersToMiles(m) },
+            splitAcrossHours = false,
+        )
+        return GridSeries(
+            qpfInches = qpfByEpoch,
+            gustMph = gustByEpoch,
+            dewPointF = dewByEpoch,
+            visibilityMi = visByEpoch,
+        )
     }
 
     /**
@@ -510,6 +529,7 @@ class NwsApi(
         grid: GridSeries,
         apiAlerts: List<WeatherHazard>?,
         tides: TideService.TideResult,
+        extras: OpenMeteoService.HourlyExtras,
         latitude: Double,
         longitude: Double,
         preferredName: String?,
@@ -601,9 +621,13 @@ class NwsApi(
         val hourlyAnchorEpochSec = periods.firstOrNull()?.startTimeIso
             ?.let { parseIso(it)?.time }
             ?.let { it / 1000L }
-        val hourly = mergeTides(
-            parseHourly(digital, grid, hourlyAnchorEpochSec),
-            tides.heightByEpochHour,
+        val hourly = mergeHourlyExtras(
+            mergeTides(
+                parseHourly(digital, grid, hourlyAnchorEpochSec),
+                tides.heightByEpochHour,
+            ),
+            grid,
+            extras,
         )
         val mapClickHazards = parseMapClickHazards(data)
         val hazards = mergeHazards(apiAlerts, mapClickHazards)
@@ -658,6 +682,33 @@ class NwsApi(
                 else -> "Steady"
             }
             row.copy(tideFt = height, tideTrend = trend)
+        }
+    }
+
+    /** Attach visibility (NWS preferred), pressure, UV, and AQI to hourly rows. */
+    private fun mergeHourlyExtras(
+        rows: List<HourlyRow>,
+        grid: GridSeries,
+        extras: OpenMeteoService.HourlyExtras,
+    ): List<HourlyRow> {
+        if (rows.isEmpty()) return rows
+        return rows.map { row ->
+            val hour = row.epochSec?.let { (it / 3600L) * 3600L } ?: return@map row
+            val vis = grid.visibilityMi[hour] ?: extras.visibilityMi[hour]
+            val pressure = extras.pressureMb[hour]
+            val uv = extras.uvIndex[hour]
+            val aqi = extras.usAqi[hour]
+            val pm = extras.pm25[hour]
+            if (vis == null && pressure == null && uv == null && aqi == null && pm == null) {
+                return@map row
+            }
+            row.copy(
+                visibilityMi = vis,
+                pressureMb = pressure,
+                uvIndex = uv,
+                usAqi = aqi,
+                pm25 = pm,
+            )
         }
     }
 
@@ -967,9 +1018,10 @@ class NwsApi(
         val qpfInches: Map<Long, Double>,
         val gustMph: Map<Long, Double>,
         val dewPointF: Map<Long, Double>,
+        val visibilityMi: Map<Long, Double> = emptyMap(),
     ) {
         companion object {
-            val EMPTY = GridSeries(emptyMap(), emptyMap(), emptyMap())
+            val EMPTY = GridSeries(emptyMap(), emptyMap(), emptyMap(), emptyMap())
         }
     }
 

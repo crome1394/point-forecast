@@ -48,6 +48,10 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         prefs.expandCurrentConditions.stateIn(viewModelScope, share, false)
     val showTidesTab = prefs.showTidesTab.stateIn(viewModelScope, share, true)
     val showSpaceWeather = prefs.showSpaceWeather.stateIn(viewModelScope, share, true)
+    val showAirQuality = prefs.showAirQuality.stateIn(viewModelScope, share, true)
+    val showVisibility = prefs.showVisibility.stateIn(viewModelScope, share, true)
+    val showPressure = prefs.showPressure.stateIn(viewModelScope, share, true)
+    val showUvIndex = prefs.showUvIndex.stateIn(viewModelScope, share, true)
 
     private val _spaceWeather = MutableStateFlow<SpaceWeatherService.Snapshot?>(null)
     val spaceWeather: StateFlow<SpaceWeatherService.Snapshot?> = _spaceWeather.asStateFlow()
@@ -230,6 +234,22 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             prefs.setShowSpaceWeather(show)
         }
+    }
+
+    fun setShowAirQuality(show: Boolean) {
+        viewModelScope.launch { prefs.setShowAirQuality(show) }
+    }
+
+    fun setShowVisibility(show: Boolean) {
+        viewModelScope.launch { prefs.setShowVisibility(show) }
+    }
+
+    fun setShowPressure(show: Boolean) {
+        viewModelScope.launch { prefs.setShowPressure(show) }
+    }
+
+    fun setShowUvIndex(show: Boolean) {
+        viewModelScope.launch { prefs.setShowUvIndex(show) }
     }
 
     suspend fun searchPlaces(query: String): List<GeocodeResult> = repo.search(query)

@@ -56,4 +56,8 @@ object WeatherMath {
     }
 
     fun inHgToMb(inHg: Double): Double = inHg * 33.8639
+
+    fun metersToMiles(m: Double): Double = m / 1609.344
+
+    fun hPaToInHg(hPa: Double): Double = hPa / 33.8639
 }

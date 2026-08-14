@@ -116,6 +116,10 @@ class MainActivity : ComponentActivity() {
                 val expandCurrentConditions by viewModel.expandCurrentConditions.collectAsState()
                 val showTidesTab by viewModel.showTidesTab.collectAsState()
                 val showSpaceWeather by viewModel.showSpaceWeather.collectAsState()
+                val showAirQuality by viewModel.showAirQuality.collectAsState()
+                val showVisibility by viewModel.showVisibility.collectAsState()
+                val showPressure by viewModel.showPressure.collectAsState()
+                val showUvIndex by viewModel.showUvIndex.collectAsState()
                 val spaceWeather by viewModel.spaceWeather.collectAsState()
 
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
@@ -428,6 +432,10 @@ class MainActivity : ComponentActivity() {
                                     tideInfo = snapshot?.tideInfo,
                                     showTidesTab = showTidesTab,
                                     showSpaceWeather = showSpaceWeather,
+                                    showAirQuality = showAirQuality,
+                                    showVisibility = showVisibility,
+                                    showPressure = showPressure,
+                                    showUvIndex = showUvIndex,
                                     spaceWeather = spaceWeather,
                                 )
                                 AppScreen.Search -> SearchScreen(
@@ -462,6 +470,10 @@ class MainActivity : ComponentActivity() {
                                     expandCurrentConditions = expandCurrentConditions,
                                     showTidesTab = showTidesTab,
                                     showSpaceWeather = showSpaceWeather,
+                                    showAirQuality = showAirQuality,
+                                    showVisibility = showVisibility,
+                                    showPressure = showPressure,
+                                    showUvIndex = showUvIndex,
                                     onAutoUpdateChange = { viewModel.setAutoUpdate(it) },
                                     onIntervalChange = { viewModel.setIntervalMinutes(it) },
                                     onTitleBarAtBottomChange = { viewModel.setTitleBarAtBottom(it) },
@@ -472,6 +484,10 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onShowTidesTabChange = { viewModel.setShowTidesTab(it) },
                                     onShowSpaceWeatherChange = { viewModel.setShowSpaceWeather(it) },
+                                    onShowAirQualityChange = { viewModel.setShowAirQuality(it) },
+                                    onShowVisibilityChange = { viewModel.setShowVisibility(it) },
+                                    onShowPressureChange = { viewModel.setShowPressure(it) },
+                                    onShowUvIndexChange = { viewModel.setShowUvIndex(it) },
                                     onManualRefresh = {
                                         viewModel.manualRefresh()
                                         screen = AppScreen.Forecast

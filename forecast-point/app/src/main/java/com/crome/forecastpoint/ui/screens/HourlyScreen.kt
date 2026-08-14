@@ -41,6 +41,7 @@ import com.crome.forecastpoint.data.HourlyRow
 import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.data.TideInfo
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
+import com.crome.forecastpoint.util.WeatherMath
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -53,6 +54,10 @@ private enum class HourlyTab(val title: String) {
     Wind("WIND"),
     Tides("TIDES"),
     Conditions("CONDITIONS"),
+    AirQuality("AIR QUALITY"),
+    Visibility("VISIBILITY"),
+    Pressure("PRESSURE"),
+    UvIndex("UV INDEX"),
     SpaceWeather("SPACE WX"),
 }
 
@@ -94,25 +99,54 @@ fun HourlyScreen(
     tideInfo: TideInfo? = null,
     showTidesTab: Boolean = true,
     showSpaceWeather: Boolean = true,
+    showAirQuality: Boolean = true,
+    showVisibility: Boolean = true,
+    showPressure: Boolean = true,
+    showUvIndex: Boolean = true,
     spaceWeather: SpaceWeatherService.Snapshot? = null,
 ) {
     val hasLocalHourly = hourly.isNotEmpty()
-    val tabs = remember(showTidesTab, showSpaceWeather, hasLocalHourly) {
+    val tabs = remember(
+        showTidesTab,
+        showSpaceWeather,
+        showAirQuality,
+        showVisibility,
+        showPressure,
+        showUvIndex,
+        hasLocalHourly,
+    ) {
         HourlyTab.entries.filter { tab ->
             when (tab) {
                 HourlyTab.Tides -> showTidesTab && hasLocalHourly
                 HourlyTab.SpaceWeather -> showSpaceWeather
+                HourlyTab.AirQuality -> showAirQuality && hasLocalHourly
+                HourlyTab.Visibility -> showVisibility && hasLocalHourly
+                HourlyTab.Pressure -> showPressure && hasLocalHourly
+                HourlyTab.UvIndex -> showUvIndex && hasLocalHourly
                 else -> hasLocalHourly
             }
         }
     }
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
-    val tabModels = remember(hourly, showTidesTab, showSpaceWeather, spaceWeather) {
+    val tabModels = remember(
+        hourly,
+        showTidesTab,
+        showSpaceWeather,
+        showAirQuality,
+        showVisibility,
+        showPressure,
+        showUvIndex,
+        spaceWeather,
+    ) {
         buildTabModels(
             hourly = hourly,
             includeTides = showTidesTab,
             includeSpaceWeather = showSpaceWeather,
+            includeAirQuality = showAirQuality,
+            includeVisibility = showVisibility,
+            includePressure = showPressure,
+            includeUvIndex = showUvIndex,
             spaceWeather = spaceWeather,
         )
     }
@@ -307,6 +341,10 @@ private fun buildTabModels(
     hourly: List<HourlyRow>,
     includeTides: Boolean = true,
     includeSpaceWeather: Boolean = true,
+    includeAirQuality: Boolean = true,
+    includeVisibility: Boolean = true,
+    includePressure: Boolean = true,
+    includeUvIndex: Boolean = true,
     spaceWeather: SpaceWeatherService.Snapshot? = null,
 ): List<TabModel> {
     // Space weather can still show when local hourly is empty (e.g. no city yet)
@@ -316,8 +354,7 @@ private fun buildTabModels(
     val times = hourly.map { formatTimeLabel(it) }
     val models = mutableListOf<TabModel>()
     if (hourly.isNotEmpty()) {
-        models +=
-        TabModel(
+        models += TabModel(
             headers = listOf("Temperature", "Feels Like", "Dew Point"),
             rows = hourly.mapIndexed { i, row ->
                 HourlyTableRow(
@@ -403,6 +440,84 @@ private fun buildTabModels(
                 )
             },
         )
+        if (includeAirQuality) {
+            models += TabModel(
+                headers = listOf("US AQI", "Category", "PM2.5"),
+                rows = hourly.mapIndexed { i, row ->
+                    val aqi = row.usAqi
+                    HourlyTableRow(
+                        time = times[i],
+                        cells = listOf(
+                            ColoredCell(aqi?.toString().orEmpty(), aqiColor(aqi)),
+                            ColoredCell(aqiCategory(aqi), aqiColor(aqi)),
+                            ColoredCell(
+                                row.pm25?.let { String.format(Locale.US, "%.1f", it) }.orEmpty(),
+                                Color(0xFFB0BEC5),
+                            ),
+                        ),
+                    )
+                },
+            )
+        }
+        if (includeVisibility) {
+            models += TabModel(
+                headers = listOf("Visibility", "Miles"),
+                rows = hourly.mapIndexed { i, row ->
+                    val mi = row.visibilityMi
+                    HourlyTableRow(
+                        time = times[i],
+                        cells = listOf(
+                            ColoredCell(visibilityLabel(mi), visibilityColor(mi)),
+                            ColoredCell(
+                                mi?.let { String.format(Locale.US, "%.1f mi", it) }.orEmpty(),
+                                Color(0xFF80DEEA),
+                            ),
+                        ),
+                    )
+                },
+            )
+        }
+        if (includePressure) {
+            models += TabModel(
+                headers = listOf("Pressure", "in Hg"),
+                rows = hourly.mapIndexed { i, row ->
+                    val mb = row.pressureMb
+                    HourlyTableRow(
+                        time = times[i],
+                        cells = listOf(
+                            ColoredCell(
+                                mb?.let { String.format(Locale.US, "%.0f mb", it) }.orEmpty(),
+                                Color(0xFFCE93D8),
+                            ),
+                            ColoredCell(
+                                mb?.let {
+                                    String.format(Locale.US, "%.2f", WeatherMath.hPaToInHg(it))
+                                }.orEmpty(),
+                                Color(0xFFB0BEC5),
+                            ),
+                        ),
+                    )
+                },
+            )
+        }
+        if (includeUvIndex) {
+            models += TabModel(
+                headers = listOf("UV Index", "Risk"),
+                rows = hourly.mapIndexed { i, row ->
+                    val uv = row.uvIndex
+                    HourlyTableRow(
+                        time = times[i],
+                        cells = listOf(
+                            ColoredCell(
+                                uv?.let { String.format(Locale.US, "%.1f", it) }.orEmpty(),
+                                uvColor(uv),
+                            ),
+                            ColoredCell(uvRisk(uv), uvColor(uv)),
+                        ),
+                    )
+                },
+            )
+        }
     }
     if (includeSpaceWeather) {
         val periods = spaceWeather?.periods.orEmpty()
@@ -457,6 +572,62 @@ private fun gScaleColor(scale: String): Color = when (scale.uppercase(Locale.US)
     "G3" -> Color(0xFFFF8A65)
     "G4", "G5" -> Color(0xFFEF5350)
     else -> Color.White
+}
+
+private fun aqiCategory(aqi: Int?): String = when {
+    aqi == null -> "—"
+    aqi <= 50 -> "Good"
+    aqi <= 100 -> "Moderate"
+    aqi <= 150 -> "USG"
+    aqi <= 200 -> "Unhealthy"
+    aqi <= 300 -> "Very Unhealthy"
+    else -> "Hazardous"
+}
+
+private fun aqiColor(aqi: Int?): Color = when {
+    aqi == null -> Color.White
+    aqi <= 50 -> Color(0xFF66BB6A)
+    aqi <= 100 -> Color(0xFFFFEE58)
+    aqi <= 150 -> Color(0xFFFFA726)
+    aqi <= 200 -> Color(0xFFEF5350)
+    aqi <= 300 -> Color(0xFFAB47BC)
+    else -> Color(0xFF8D6E63)
+}
+
+private fun visibilityLabel(mi: Double?): String = when {
+    mi == null -> "—"
+    mi >= 10 -> "Excellent"
+    mi >= 6 -> "Good"
+    mi >= 3 -> "Moderate"
+    mi >= 1 -> "Poor"
+    else -> "Very Poor"
+}
+
+private fun visibilityColor(mi: Double?): Color = when {
+    mi == null -> Color.White
+    mi >= 10 -> Color(0xFF66BB6A)
+    mi >= 6 -> Color(0xFF9CCC65)
+    mi >= 3 -> Color(0xFFFFEE58)
+    mi >= 1 -> Color(0xFFFFA726)
+    else -> Color(0xFFEF5350)
+}
+
+private fun uvRisk(uv: Double?): String = when {
+    uv == null -> "—"
+    uv < 3 -> "Low"
+    uv < 6 -> "Moderate"
+    uv < 8 -> "High"
+    uv < 11 -> "Very High"
+    else -> "Extreme"
+}
+
+private fun uvColor(uv: Double?): Color = when {
+    uv == null -> Color.White
+    uv < 3 -> Color(0xFF66BB6A)
+    uv < 6 -> Color(0xFFFFEE58)
+    uv < 8 -> Color(0xFFFFA726)
+    uv < 11 -> Color(0xFFEF5350)
+    else -> Color(0xFFAB47BC)
 }
 
 

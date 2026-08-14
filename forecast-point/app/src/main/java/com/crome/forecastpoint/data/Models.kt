@@ -90,6 +90,16 @@ data class HourlyRow(
     val tideFt: Double? = null,
     /** Rising / Falling / Steady vs previous hour, when known. */
     val tideTrend: String? = null,
+    /** Visibility in miles (NWS grid and/or Open-Meteo). */
+    val visibilityMi: Double? = null,
+    /** Surface pressure in millibars / hPa. */
+    val pressureMb: Double? = null,
+    /** UV index (0–11+). */
+    val uvIndex: Double? = null,
+    /** US AQI (0–500 scale). */
+    val usAqi: Int? = null,
+    /** PM2.5 µg/m³ when available. */
+    val pm25: Double? = null,
 )
 
 @Serializable

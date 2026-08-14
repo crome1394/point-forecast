@@ -46,6 +46,10 @@ fun SettingsScreen(
     expandCurrentConditions: Boolean,
     showTidesTab: Boolean,
     showSpaceWeather: Boolean,
+    showAirQuality: Boolean,
+    showVisibility: Boolean,
+    showPressure: Boolean,
+    showUvIndex: Boolean,
     onAutoUpdateChange: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
     onTitleBarAtBottomChange: (Boolean) -> Unit,
@@ -54,6 +58,10 @@ fun SettingsScreen(
     onExpandCurrentConditionsChange: (Boolean) -> Unit,
     onShowTidesTabChange: (Boolean) -> Unit,
     onShowSpaceWeatherChange: (Boolean) -> Unit,
+    onShowAirQualityChange: (Boolean) -> Unit,
+    onShowVisibilityChange: (Boolean) -> Unit,
+    onShowPressureChange: (Boolean) -> Unit,
+    onShowUvIndexChange: (Boolean) -> Unit,
     onManualRefresh: () -> Unit,
 ) {
     Column(
@@ -171,6 +179,39 @@ fun SettingsScreen(
                 onCheckedChange = onShowSpaceWeatherChange,
             )
         }
+
+        Spacer(Modifier.height(12.dp))
+        HourlyTabToggle(
+            title = "Show air quality",
+            checked = showAirQuality,
+            onCheckedChange = onShowAirQualityChange,
+            onDescription = "Hourly US AQI / PM2.5 (Open-Meteo)",
+            offDescription = "Air quality tab is hidden",
+        )
+        Spacer(Modifier.height(12.dp))
+        HourlyTabToggle(
+            title = "Show visibility",
+            checked = showVisibility,
+            onCheckedChange = onShowVisibilityChange,
+            onDescription = "Hourly visibility (NWS + Open-Meteo)",
+            offDescription = "Visibility tab is hidden",
+        )
+        Spacer(Modifier.height(12.dp))
+        HourlyTabToggle(
+            title = "Show pressure",
+            checked = showPressure,
+            onCheckedChange = onShowPressureChange,
+            onDescription = "Hourly surface pressure (mb / in Hg)",
+            offDescription = "Pressure tab is hidden",
+        )
+        Spacer(Modifier.height(12.dp))
+        HourlyTabToggle(
+            title = "Show UV index",
+            checked = showUvIndex,
+            onCheckedChange = onShowUvIndexChange,
+            onDescription = "Hourly UV index and risk category",
+            offDescription = "UV index tab is hidden",
+        )
 
         Spacer(Modifier.height(12.dp))
 
@@ -301,6 +342,33 @@ fun SettingsScreen(
             color = OnSurfaceMuted,
             fontSize = 13.sp,
         )
+    }
+}
+
+@Composable
+private fun HourlyTabToggle(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onDescription: String,
+    offDescription: String,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceDark)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 16.sp)
+            Text(
+                if (checked) onDescription else offDescription,
+                color = OnSurfaceMuted,
+                fontSize = 13.sp,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
