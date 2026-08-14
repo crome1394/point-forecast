@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.crome.forecastpoint.BuildConfig
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 
 @Composable
@@ -26,7 +27,11 @@ fun AboutScreen() {
             .padding(24.dp),
     ) {
         Text("Point Forecast", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("Version 1.0.0", color = OnSurfaceMuted, modifier = Modifier.padding(top = 4.dp))
+        Text(
+            "Version ${BuildConfig.VERSION_NAME}",
+            color = OnSurfaceMuted,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         Text(
             "Independent open-source weather client for U.S. National Weather Service " +
                 "point forecasts, hourly data, tides, alerts, map location pick, and a " +
@@ -47,6 +52,8 @@ fun AboutScreen() {
             "Data & libraries\n" +
                 "• Forecasts & alerts: National Weather Service (weather.gov / api.weather.gov)\n" +
                 "• Tides: NOAA CO-OPS\n" +
+                "• Space weather: NOAA SWPC\n" +
+                "• Air quality / UV / pressure: Open-Meteo\n" +
                 "• Map tiles: OpenStreetMap / CARTO (via osmdroid)\n" +
                 "• Geocoding: OpenStreetMap Nominatim\n" +
                 "• Icons: NWS forecast icon set (bundled)",

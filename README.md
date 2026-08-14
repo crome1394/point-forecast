@@ -1,192 +1,83 @@
 # Point Forecast
 
-**Point Forecast** is an independent, open-source Android weather client for
-**U.S. National Weather Service** point forecasts. It focuses on clear forecasts,
-hourly tables, tides (where available), active alerts, an offline-friendly map
-picker, and a resizable home-screen widget—with **bundled NWS forecast icons**
-so they display correctly on de-Googled devices such as **CalyxOS**.
+U.S. National Weather Service **point forecasts** on Android—clear, offline-friendly, and FOSS.
 
-> **Not affiliated with NOAA, the National Weather Service, or Pandamonium Software.**  
-> This is a community project that uses **public** weather data APIs.
+**Not affiliated with NOAA, NWS, or any commercial weather app.** Uses public APIs only.
 
 | | |
 |---|---|
-| **App name** | Point Forecast |
-| **Application ID** | `com.crome.forecastpoint` |
-| **Min Android** | 8.0 (API 26) |
-| **License** | MIT (see [LICENSE](LICENSE)) |
-| **Android project** | [`forecast-point/`](forecast-point/) |
+| **App** | Point Forecast |
+| **ID** | `com.crome.forecastpoint` |
+| **Android** | 8.0+ (API 26) |
+| **License** | [MIT](LICENSE) |
+| **Code** | [`forecast-point/`](forecast-point/) |
 
-## Download (APK)
+## What it does
 
-**Prefer a [GitHub Release](https://github.com/crome1394/forecast-point/releases)** over committing APKs into the repo. Releases keep `main` small, give you versioned history, and provide a stable download URL.
+- **Current conditions** and multi-day NWS forecast  
+- **Hourly** tables: temperature, precip, wind, conditions; optional tides, air quality, visibility, pressure, UV, space weather  
+- **Alerts** when watches/warnings/advisories are active  
+- **Map** pick (GPS pin + selection pin), city search (city + state)  
+- **Radar** link (weather.gov) from the app bar  
+- **Home widget** with bundled NWS icons (works on CalyxOS)  
+- **Settings** for layout, widget mode, and which hourly tabs to show  
 
-### Latest release
+## Download
 
-| | |
-|---|---|
-| **Releases page** | [github.com/crome1394/forecast-point/releases](https://github.com/crome1394/forecast-point/releases) |
-| **Direct APK (v1.0.2)** | [PointForecast-1.0.2.apk](https://github.com/crome1394/forecast-point/releases/download/v1.0.2/PointForecast-1.0.2.apk) |
-
-> The direct link works **after** you publish a release named `v1.0.2` and attach the file `PointForecast-1.0.2.apk` (see below).
-
-### Install on Android
-
-1. Download the APK on your phone (or copy it over USB).
-2. Allow install from that source if prompted (unknown apps / Files / browser).
-3. Open the APK and install.
-
-Or from a computer:
+[**Releases**](https://github.com/crome1394/forecast-point/releases) — install the latest `PointForecast-*.apk`.
 
 ```bash
-adb install -r PointForecast-1.0.2.apk
+adb install -r PointForecast-1.0.3.apk
 ```
 
-### Does the file have to be named `app-debug.apk`?
+## Build
 
-**No.** That name is only Gradle’s default debug output path:
-
-```text
-forecast-point/app/build/outputs/apk/debug/app-debug.apk
-```
-
-For distribution, rename it to something clear, for example:
-
-```text
-PointForecast-1.0.2.apk
-```
-
-### Publish a release (recommended)
-
-On your machine, after the project builds:
-
-```bash
-cd ~/src/noaa/forecast-point
-./gradlew :app:assembleDebug
-
-# Friendly name for the release asset
-mkdir -p ../dist
-cp app/build/outputs/apk/debug/app-debug.apk ../dist/PointForecast-1.0.2.apk
-```
-
-Then on GitHub:
-
-1. Open **https://github.com/crome1394/forecast-point/releases/new**
-2. **Choose a tag:** `v1.0.2` (create new tag on publish, target `main`)
-3. **Release title:** `Point Forecast 1.0.2`
-4. Paste notes from [CHANGELOG.md](CHANGELOG.md) (1.0.2 section)
-5. **Attach** `dist/PointForecast-1.0.2.apk` (drag and drop)
-6. Publish release
-
-The direct download URL will be:
-
-```text
-https://github.com/crome1394/forecast-point/releases/download/v1.0.2/PointForecast-1.0.2.apk
-```
-
-## Features
-
-- Current conditions (expandable details)
-- Multi-day forecast cards
-- Hourly forecast (temperature with heat-scale colors, precipitation, wind, tides, conditions)
-- Swipe between hourly tabs
-- Active watches / warnings / advisories when issued
-- Home-screen widget (period temps or high/low; resizable)
-- Add cities by search, map pin (confirm chip), or current GPS location
-- Favorites with rename / remove
-- Radar link centered on the active location (`radar.weather.gov`)
-- Settings: auto-update interval, title bar position, widget mode, map search position, expand Current Conditions
-
-## Inspiration
-
-The overall UX was **inspired by** the commercial app
-[NOAA Weather & Tides](https://play.google.com/store/apps/details?id=pandamonium.noaaweather)
-by **Pandamonium Software**.
-
-Point Forecast is a **separate reimplementation**:
-
-- New Kotlin / Jetpack Compose codebase  
-- Public NWS, NOAA CO-OPS, and OSM services  
-- Bundled public-style NWS icons for reliability  
-- **No** proprietary code or assets from that Play Store app  
-
-See [NOTICE](NOTICE) for full attribution.
-
-## Screenshots
-
-Development screenshots (for reference) live under [`Screenshots/`](Screenshots/).
-
-## Build from source
-
-Requirements:
-
-- JDK 17+
-- Android SDK (platform 35 recommended)
-- Network for dependencies and live weather data
+**Needs:** JDK 17+, Android SDK.
 
 ```bash
 cd forecast-point
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease   # or :app:assembleDebug
 ```
 
-Gradle writes:
-
-```text
-forecast-point/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Rename for sharing (optional but recommended):
+Output: `app/build/outputs/apk/…/app-*.apk`
 
 ```bash
-cp app/build/outputs/apk/debug/app-debug.apk ../dist/PointForecast-1.0.2.apk
-adb install -r ../dist/PointForecast-1.0.2.apk
+adb install -r app/build/outputs/apk/release/app-release-unsigned.apk
+# or debug:
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-> **Note:** This build is a *debug* APK (fine for personal/sideload use). A signed *release* build is better for wider distribution; that needs a keystore you keep private.
+F-Droid and signed store builds use **release** variants built from a git tag. See [CHANGELOG.md](CHANGELOG.md).
+
+## Specs
+
+| | |
+|---|---|
+| Language | Kotlin |
+| UI | Jetpack Compose |
+| Min / target SDK | 26 / 35 |
+| Maps | osmdroid + OSM / CARTO (no Google Play Services) |
 
 ## Data sources
 
 | Data | Source |
 |------|--------|
-| Forecast / observations | NWS MapClick + digitalJSON (`forecast.weather.gov`) |
-| Grid extras (QPF, gusts, dewpoint) | `api.weather.gov` gridpoints |
-| Alerts | `api.weather.gov/alerts/active` |
-| Tides | NOAA CO-OPS datagetter + station catalog |
-| Radar (browser) | `radar.weather.gov` location bookmark |
-| Search / reverse geocode | OpenStreetMap Nominatim |
-| Map | osmdroid + CARTO light tiles / OSM data |
+| Forecast, observations, alerts | NWS (`weather.gov`, `api.weather.gov`) |
+| Tides | NOAA CO-OPS |
+| Space weather (Kp / G-scale) | NOAA SWPC |
+| Air quality, UV, pressure | [Open-Meteo](https://open-meteo.com/) (optional extras) |
+| Search / map | OpenStreetMap Nominatim, osmdroid, CARTO |
 
-Please use these services respectfully (identify your client, cache when possible).
-
-## Project layout
-
-```text
-.
-├── LICENSE                 MIT license
-├── NOTICE                  Credits & disclaimers
-├── README.md               This file
-├── CHANGELOG.md            Release history
-├── CONTRIBUTING.md         How to contribute
-├── .gitignore
-├── forecast-point/         Android Studio / Gradle app
-│   └── app/
-├── Screenshots/            Optional UI captures
-└── icon-reference/         Sample NWS icon files (dev reference)
-```
+Coverage is **U.S. NWS points** for core forecast. Use APIs politely (clear User-Agent, caching).
 
 ## Privacy
 
-Point Forecast does not require a user account. Location is used only when you
-choose GPS, map pick, or search. Weather requests go to public NWS/NOAA/OSM
-endpoints; there is no separate Point Forecast analytics backend in this
-project.
+No accounts. No analytics backend in this project. Location is used only when you pick GPS, map, or search. Network traffic goes to the public services above.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Credits and legal notes: [NOTICE](NOTICE).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-Third-party data and libraries remain under their own terms (see [NOTICE](NOTICE)).
+[MIT](LICENSE). Third-party data and libraries keep their own terms ([NOTICE](NOTICE)).

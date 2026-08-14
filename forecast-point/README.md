@@ -1,13 +1,10 @@
-# Point Forecast (Android module)
+# Point Forecast (Android)
 
-Gradle project for the **Point Forecast** Android app.
+Gradle module for **Point Forecast** (`com.crome.forecastpoint`).
 
-- Application ID: `com.crome.forecastpoint`
-- Root documentation: [../README.md](../README.md)
-
-## Build
+Full docs: [../README.md](../README.md)
 
 ```bash
-./gradlew :app:assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleRelease   # or assembleDebug
+adb install -r app/build/outputs/apk/release/app-release-unsigned.apk
 ```

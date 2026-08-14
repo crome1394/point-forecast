@@ -41,6 +41,14 @@ These libraries are used under their respective open-source licenses
 Weather condition icons are derived from the National Weather Service forecast
 icon set used on weather.gov (bundled for offline/reliable display).
 
+### NOAA Space Weather Prediction Center (SWPC)
+Planetary Kp index and geomagnetic scale products from services.swpc.noaa.gov.
+
+### Open-Meteo
+Optional hourly extras (air quality / US AQI, UV index, surface pressure, and
+visibility fallback) via https://open-meteo.com/ (open data; free non-commercial
+API terms apply). See https://open-meteo.com/en/licence
+
 Inspiration
 -----------
 
