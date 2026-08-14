@@ -576,6 +576,7 @@ class MainActivity : ComponentActivity() {
                                     longitude = celestialLon,
                                     locationName = snapshot?.locationName,
                                     initialBody = sunMoonBody,
+                                    titleBarAtBottom = titleBarAtBottom,
                                 )
                             }
                         }
