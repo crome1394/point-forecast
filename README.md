@@ -14,13 +14,14 @@ U.S. National Weather Service **point forecasts** on Android—clear, offline-fr
 
 ## What it does
 
-- **Current conditions** and multi-day NWS forecast  
-- **Hourly** tables: temperature, precip, wind, conditions; optional tides, air quality, visibility, pressure, UV, space weather  
-- **Alerts** when watches/warnings/advisories are active  
-- **Map** pick (GPS pin + selection pin), city search (city + state)  
-- **Radar** link (weather.gov) from the app bar  
-- **Home widget** with bundled NWS icons (works on CalyxOS)  
-- **Settings** for layout, widget mode, and which hourly tabs to show  
+- **Current conditions** and multi-day NWS forecast (pull-to-refresh on the main screen)
+- **Hourly** tables with configurable order and visibility: temperature, precip, wind, conditions, tides / water level, air quality, visibility, pressure, UV, space weather
+- **Alerts** when watches/warnings/advisories are active (optional auto-expand)
+- **Map** pick (GPS pin + selection pin), city search (city + state)
+- **Radar** link (weather.gov) from the app bar
+- **Sun / moon / space weather / earthquakes / tornado & hurricane** summaries (title-bar menu, drawer, body switcher tabs)
+- **Home widget** with bundled NWS icons (works on CalyxOS)
+- **Settings** for layout, widget mode, hourly tabs, hamburger menu, map focus radius, space weather cue thresholds
 
 ## Download
 
@@ -47,7 +48,7 @@ adb install -r app/build/outputs/apk/release/app-release-unsigned.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-F-Droid and signed store builds use **release** variants built from a git tag. See [CHANGELOG.md](CHANGELOG.md).
+Signed store / F-Droid builds: see [RELEASE.md](RELEASE.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ## Specs
 
@@ -63,12 +64,14 @@ F-Droid and signed store builds use **release** variants built from a git tag. S
 | Data | Source |
 |------|--------|
 | Forecast, observations, alerts | NWS (`weather.gov`, `api.weather.gov`) |
-| Tides | NOAA CO-OPS |
-| Space weather (Kp / G-scale) | NOAA SWPC |
+| Tides / water levels | NOAA CO-OPS (tides, subordinate offsets, Great Lakes); USGS NWIS stage (rivers/inland) |
+| Space weather (Kp / G/R/S) | NOAA SWPC |
+| Earthquakes | USGS Earthquake Hazards Program (FDSN) |
+| Tornado reports / tropical storms | NOAA SPC storm reports; NHC CurrentStorms; NWS CAP alerts |
 | Air quality, UV, pressure | [Open-Meteo](https://open-meteo.com/) (optional extras) |
 | Search / map | OpenStreetMap Nominatim, osmdroid, CARTO |
 
-Coverage is **U.S. NWS points** for core forecast. Use APIs politely (clear User-Agent, caching).
+Coverage for core forecast is **U.S. NWS points**. Use APIs politely (clear User-Agent, caching).
 
 ## Privacy
 
@@ -76,7 +79,7 @@ No accounts. No analytics backend in this project. Location is used only when yo
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Credits and legal notes: [NOTICE](NOTICE).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Release steps: [RELEASE.md](RELEASE.md). Credits and legal notes: [NOTICE](NOTICE).
 
 ## License
 

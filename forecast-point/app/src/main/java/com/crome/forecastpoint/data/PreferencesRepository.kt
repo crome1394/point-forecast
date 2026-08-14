@@ -9,10 +9,25 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private val Context.dataStore by preferencesDataStore(name = "forecast_point_prefs")
+
+/** One Hourly screen tab: stable [id] (enum name), [enabled], position = list order. */
+@Serializable
+data class HourlyTabConfigItem(
+    val id: String,
+    val enabled: Boolean = true,
+)
+
+/** One hamburger-menu row: stable [id], [enabled], position = list order. */
+@Serializable
+data class DrawerNavConfigItem(
+    val id: String,
+    val enabled: Boolean = true,
+)
 
 class PreferencesRepository(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -28,12 +43,32 @@ class PreferencesRepository(private val context: Context) {
     private val keyWidgetShowHighLow = booleanPreferencesKey("widget_show_high_low")
     private val keyMapSearchBottom = booleanPreferencesKey("map_search_at_bottom")
     private val keyExpandCurrentConditions = booleanPreferencesKey("expand_current_conditions")
+    /** When true (default), Current Conditions starts open if any watch/warning/advisory is active. */
+    private val keyExpandAdvisories = booleanPreferencesKey("expand_advisories")
     private val keyShowTidesTab = booleanPreferencesKey("show_tides_tab")
     private val keyShowSpaceWeather = booleanPreferencesKey("show_space_weather")
     private val keyShowAirQuality = booleanPreferencesKey("show_air_quality")
     private val keyShowVisibility = booleanPreferencesKey("show_visibility")
     private val keyShowPressure = booleanPreferencesKey("show_pressure")
     private val keyShowUvIndex = booleanPreferencesKey("show_uv_index")
+    private val keyShowTitleSearch = booleanPreferencesKey("show_title_search")
+    private val keyShowTitleSunMoon = booleanPreferencesKey("show_title_sun_moon")
+    /** JSON array of HourlyTab names controlling swipe order on the Hourly screen (legacy). */
+    private val keyHourlyTabOrder = stringPreferencesKey("hourly_tab_order_json")
+    /** JSON array of [HourlyTabConfigItem] — order + enable for every hourly tab. */
+    private val keyHourlyTabConfig = stringPreferencesKey("hourly_tab_config_json")
+    /** Min NOAA scale (1–5) for title-bar Watch (purple) cue. Default 1 = G1/R1/S1. */
+    private val keySwWatchThreshold = intPreferencesKey("sw_watch_threshold")
+    /** Min NOAA scale (1–5) for title-bar Active (orange) cue. Default 2 = G2/R2/S2. */
+    private val keySwActiveThreshold = intPreferencesKey("sw_active_threshold")
+    /** Hours ahead to consider predicted Kp/G for the title-bar cue. */
+    private val keySwForecastHorizonHours = intPreferencesKey("sw_forecast_horizon_hours")
+    /** Hazard map focus radius (miles) for earthquake / tornado-hurricane maps. */
+    private val keyMapFocusRadiusMiles = intPreferencesKey("map_focus_radius_miles")
+    /** JSON array of drawer nav item ids (hamburger menu order) — legacy. */
+    private val keyDrawerNavOrder = stringPreferencesKey("drawer_nav_order_json")
+    /** JSON array of [DrawerNavConfigItem] — order + visibility for hamburger items. */
+    private val keyDrawerNavConfig = stringPreferencesKey("drawer_nav_config_json")
 
     val autoUpdateEnabled: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoUpdate] ?: true }
@@ -60,37 +95,123 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.data.map { it[keyMapSearchBottom] ?: false }
 
     /**
-     * When true, Current Conditions starts expanded on the main screen.
-     * Active hazards still force-expand regardless of this setting.
+     * When true, Current Conditions starts expanded on the main screen
+     * even when there are no active advisories.
      */
     val expandCurrentConditions: Flow<Boolean> =
         context.dataStore.data.map { it[keyExpandCurrentConditions] ?: false }
 
     /**
-     * When true (default), the Hourly screen includes the Tides tab.
-     * Inland users can turn this off.
+     * When true (default), Current Conditions starts expanded if any
+     * watch / warning / advisory is active. Turn off to keep the card
+     * collapsed until you tap it (hazard banner still shows when collapsed).
      */
-    val showTidesTab: Flow<Boolean> =
-        context.dataStore.data.map { it[keyShowTidesTab] ?: true }
+    val expandAdvisories: Flow<Boolean> =
+        context.dataStore.data.map { it[keyExpandAdvisories] ?: true }
+
+    /** Title bar: Add City / search icon on Forecast & Hourly. */
+    val showTitleSearch: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowTitleSearch] ?: true }
+
+    /** Title bar: Sun/Moon menu icon on Forecast & Hourly. */
+    val showTitleSunMoon: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowTitleSunMoon] ?: true }
 
     /**
-     * When true (default), Hourly includes a Space Weather tab (NOAA SWPC Kp / G-scale).
-     * Planetary data — not tied to the selected city.
+     * Default view radius (miles) for earthquake and tornado/hurricane summary maps
+     * (zoom so about this distance is visible from the selected city).
      */
-    val showSpaceWeather: Flow<Boolean> =
-        context.dataStore.data.map { it[keyShowSpaceWeather] ?: true }
+    val mapFocusRadiusMiles: Flow<Int> =
+        context.dataStore.data.map { prefs ->
+            val raw = prefs[keyMapFocusRadiusMiles] ?: DEFAULT_MAP_FOCUS_RADIUS_MILES
+            MAP_FOCUS_RADIUS_OPTIONS.minByOrNull { kotlin.math.abs(it - raw) }
+                ?: DEFAULT_MAP_FOCUS_RADIUS_MILES
+        }
 
-    val showAirQuality: Flow<Boolean> =
-        context.dataStore.data.map { it[keyShowAirQuality] ?: true }
+    /**
+     * Hamburger menu: order + which items are shown.
+     * Migrates from legacy order-only pref when the config key is absent.
+     */
+    val drawerNavConfig: Flow<List<DrawerNavConfigItem>> =
+        context.dataStore.data.map { prefs ->
+            val rawConfig = prefs[keyDrawerNavConfig]
+            if (!rawConfig.isNullOrBlank()) {
+                val parsed = runCatching {
+                    json.decodeFromString<List<DrawerNavConfigItem>>(rawConfig)
+                }.getOrDefault(emptyList())
+                return@map normalizeDrawerNavConfig(parsed)
+            }
+            val orderRaw = prefs[keyDrawerNavOrder]
+            val order = if (orderRaw.isNullOrBlank()) {
+                DEFAULT_DRAWER_NAV_ORDER
+            } else {
+                runCatching { json.decodeFromString<List<String>>(orderRaw) }
+                    .getOrDefault(DEFAULT_DRAWER_NAV_ORDER)
+            }
+            normalizeDrawerNavConfig(
+                normalizeDrawerNavOrder(order).map { id ->
+                    DrawerNavConfigItem(id = id, enabled = true)
+                },
+            )
+        }
 
-    val showVisibility: Flow<Boolean> =
-        context.dataStore.data.map { it[keyShowVisibility] ?: true }
+    /**
+     * Full Hourly tab configuration (order + which tabs are shown).
+     * Migrates from legacy order + per-tab boolean prefs when the new key is absent.
+     */
+    val hourlyTabConfig: Flow<List<HourlyTabConfigItem>> =
+        context.dataStore.data.map { prefs ->
+            val rawConfig = prefs[keyHourlyTabConfig]
+            if (!rawConfig.isNullOrBlank()) {
+                val parsed = runCatching {
+                    json.decodeFromString<List<HourlyTabConfigItem>>(rawConfig)
+                }.getOrDefault(emptyList())
+                return@map normalizeHourlyTabConfig(parsed)
+            }
+            // Legacy migration path
+            val orderRaw = prefs[keyHourlyTabOrder]
+            val order = if (orderRaw.isNullOrBlank()) {
+                DEFAULT_HOURLY_TAB_ORDER
+            } else {
+                runCatching { json.decodeFromString<List<String>>(orderRaw) }
+                    .getOrDefault(DEFAULT_HOURLY_TAB_ORDER)
+            }
+            val enabledById = mapOf(
+                "Tides" to (prefs[keyShowTidesTab] ?: true),
+                "SpaceWeather" to (prefs[keyShowSpaceWeather] ?: true),
+                "AirQuality" to (prefs[keyShowAirQuality] ?: true),
+                "Visibility" to (prefs[keyShowVisibility] ?: true),
+                "Pressure" to (prefs[keyShowPressure] ?: true),
+                "UvIndex" to (prefs[keyShowUvIndex] ?: true),
+            )
+            normalizeHourlyTabConfig(
+                normalizeHourlyTabOrder(order).map { id ->
+                    HourlyTabConfigItem(id = id, enabled = enabledById[id] ?: true)
+                },
+            )
+        }
 
-    val showPressure: Flow<Boolean> =
-        context.dataStore.data.map { it[keyShowPressure] ?: true }
+    /**
+     * Title-bar space-weather Watch threshold (1–5). Default 1 (minor = G1/R1/S1).
+     * Active threshold is always stored ≥ watch + 0, but UI keeps active > watch.
+     */
+    val spaceWeatherWatchThreshold: Flow<Int> =
+        context.dataStore.data.map {
+            (it[keySwWatchThreshold] ?: DEFAULT_SW_WATCH_THRESHOLD).coerceIn(1, 5)
+        }
 
-    val showUvIndex: Flow<Boolean> =
-        context.dataStore.data.map { it[keyShowUvIndex] ?: true }
+    /** Title-bar Active threshold (1–5). Default 2 (moderate). */
+    val spaceWeatherActiveThreshold: Flow<Int> =
+        context.dataStore.data.map {
+            (it[keySwActiveThreshold] ?: DEFAULT_SW_ACTIVE_THRESHOLD).coerceIn(1, 5)
+        }
+
+    /** Forecast horizon in hours for predicted G in the title-bar cue. */
+    val spaceWeatherForecastHorizonHours: Flow<Int> =
+        context.dataStore.data.map {
+            (it[keySwForecastHorizonHours] ?: DEFAULT_SW_HORIZON_HOURS)
+                .let { h -> SW_HORIZON_OPTIONS.minByOrNull { opt -> kotlin.math.abs(opt - h) } ?: DEFAULT_SW_HORIZON_HOURS }
+        }
 
     val favorites: Flow<List<SavedLocation>> =
         context.dataStore.data.map { prefs ->
@@ -138,28 +259,78 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[keyExpandCurrentConditions] = expand }
     }
 
-    suspend fun setShowTidesTab(show: Boolean) {
-        context.dataStore.edit { it[keyShowTidesTab] = show }
+    suspend fun setExpandAdvisories(expand: Boolean) {
+        context.dataStore.edit { it[keyExpandAdvisories] = expand }
     }
 
-    suspend fun setShowSpaceWeather(show: Boolean) {
-        context.dataStore.edit { it[keyShowSpaceWeather] = show }
+    suspend fun setShowTitleSearch(show: Boolean) {
+        context.dataStore.edit { it[keyShowTitleSearch] = show }
     }
 
-    suspend fun setShowAirQuality(show: Boolean) {
-        context.dataStore.edit { it[keyShowAirQuality] = show }
+    suspend fun setShowTitleSunMoon(show: Boolean) {
+        context.dataStore.edit { it[keyShowTitleSunMoon] = show }
     }
 
-    suspend fun setShowVisibility(show: Boolean) {
-        context.dataStore.edit { it[keyShowVisibility] = show }
+    suspend fun setHourlyTabConfig(config: List<HourlyTabConfigItem>) {
+        val normalized = normalizeHourlyTabConfig(config)
+        context.dataStore.edit {
+            it[keyHourlyTabConfig] = json.encodeToString(normalized)
+            // Keep legacy order in sync for older builds / rollback safety
+            it[keyHourlyTabOrder] = json.encodeToString(normalized.map { item -> item.id })
+        }
     }
 
-    suspend fun setShowPressure(show: Boolean) {
-        context.dataStore.edit { it[keyShowPressure] = show }
+    suspend fun setMapFocusRadiusMiles(miles: Int) {
+        val chosen = MAP_FOCUS_RADIUS_OPTIONS.minByOrNull { kotlin.math.abs(it - miles) }
+            ?: DEFAULT_MAP_FOCUS_RADIUS_MILES
+        context.dataStore.edit { it[keyMapFocusRadiusMiles] = chosen }
     }
 
-    suspend fun setShowUvIndex(show: Boolean) {
-        context.dataStore.edit { it[keyShowUvIndex] = show }
+    suspend fun setDrawerNavConfig(config: List<DrawerNavConfigItem>) {
+        val normalized = normalizeDrawerNavConfig(config)
+        context.dataStore.edit {
+            it[keyDrawerNavConfig] = json.encodeToString(normalized)
+            it[keyDrawerNavOrder] = json.encodeToString(normalized.map { item -> item.id })
+        }
+    }
+
+    /** Reorder only (preserves enabled flags). Used by the drawer drag gesture. */
+    suspend fun setDrawerNavOrder(order: List<String>) {
+        val current = drawerNavConfig.first()
+        val enabledById = current.associate { it.id to it.enabled }
+        val normalized = normalizeDrawerNavOrder(order).map { id ->
+            DrawerNavConfigItem(id = id, enabled = enabledById[id] ?: true)
+        }
+        setDrawerNavConfig(normalized)
+    }
+
+    suspend fun setSpaceWeatherWatchThreshold(level: Int) {
+        val watch = level.coerceIn(1, 5)
+        context.dataStore.edit { prefs ->
+            prefs[keySwWatchThreshold] = watch
+            val active = (prefs[keySwActiveThreshold] ?: DEFAULT_SW_ACTIVE_THRESHOLD).coerceIn(1, 5)
+            // Active must be at least one step above Watch when possible
+            if (active <= watch) {
+                prefs[keySwActiveThreshold] = (watch + 1).coerceAtMost(5)
+            }
+        }
+    }
+
+    suspend fun setSpaceWeatherActiveThreshold(level: Int) {
+        val active = level.coerceIn(1, 5)
+        context.dataStore.edit { prefs ->
+            prefs[keySwActiveThreshold] = active
+            val watch = (prefs[keySwWatchThreshold] ?: DEFAULT_SW_WATCH_THRESHOLD).coerceIn(1, 5)
+            if (watch >= active) {
+                prefs[keySwWatchThreshold] = (active - 1).coerceAtLeast(1)
+            }
+        }
+    }
+
+    suspend fun setSpaceWeatherForecastHorizonHours(hours: Int) {
+        val chosen = SW_HORIZON_OPTIONS.minByOrNull { kotlin.math.abs(it - hours) }
+            ?: DEFAULT_SW_HORIZON_HOURS
+        context.dataStore.edit { it[keySwForecastHorizonHours] = chosen }
     }
 
     suspend fun setActiveLocationId(id: String?) {
@@ -230,5 +401,138 @@ class PreferencesRepository(private val context: Context) {
     companion object {
         const val DEFAULT_INTERVAL_MIN = 30
         val INTERVAL_OPTIONS = listOf(15, 30, 60, 120, 180, 360, 720)
+
+        const val DEFAULT_SW_WATCH_THRESHOLD = 1
+        const val DEFAULT_SW_ACTIVE_THRESHOLD = 2
+        const val DEFAULT_SW_HORIZON_HOURS = 48
+        const val DEFAULT_MAP_FOCUS_RADIUS_MILES = 250
+        /** Hazard map focus radius options (miles from selected city). */
+        val MAP_FOCUS_RADIUS_OPTIONS = listOf(50, 100, 150, 250, 400, 500)
+        /** Look-ahead options for predicted geomagnetic activity. */
+        val SW_HORIZON_OPTIONS = listOf(24, 48, 72)
+        /** Selectable NOAA scale levels for Watch / Active cues. */
+        val SW_SCALE_OPTIONS = listOf(1, 2, 3, 4, 5)
+
+        /**
+         * Default Hourly tab order (must match [com.crome.forecastpoint.ui.screens.HourlyTab] names).
+         */
+        val DEFAULT_HOURLY_TAB_ORDER = listOf(
+            "Temperature",
+            "Precipitation",
+            "Wind",
+            "Tides",
+            "Conditions",
+            "AirQuality",
+            "Visibility",
+            "Pressure",
+            "UvIndex",
+            "SpaceWeather",
+        )
+
+        fun normalizeHourlyTabOrder(order: List<String>): List<String> {
+            val known = DEFAULT_HOURLY_TAB_ORDER.toSet()
+            val seen = LinkedHashSet<String>()
+            order.forEach { id -> if (id in known) seen.add(id) }
+            DEFAULT_HOURLY_TAB_ORDER.forEach { id -> if (id !in seen) seen.add(id) }
+            return seen.toList()
+        }
+
+        fun defaultHourlyTabConfig(): List<HourlyTabConfigItem> =
+            DEFAULT_HOURLY_TAB_ORDER.map { HourlyTabConfigItem(id = it, enabled = true) }
+
+        fun normalizeHourlyTabConfig(config: List<HourlyTabConfigItem>): List<HourlyTabConfigItem> {
+            val known = DEFAULT_HOURLY_TAB_ORDER.toSet()
+            val enabledById = LinkedHashMap<String, Boolean>()
+            val order = ArrayList<String>()
+            config.forEach { item ->
+                if (item.id in known && item.id !in enabledById) {
+                    enabledById[item.id] = item.enabled
+                    order.add(item.id)
+                }
+            }
+            DEFAULT_HOURLY_TAB_ORDER.forEach { id ->
+                if (id !in enabledById) {
+                    enabledById[id] = true
+                    order.add(id)
+                }
+            }
+            return order.map { id -> HourlyTabConfigItem(id = id, enabled = enabledById[id] == true) }
+        }
+
+        fun hourlyTabDisplayName(id: String): String = when (id) {
+            "Temperature" -> "Temperature"
+            "Precipitation" -> "Precipitation"
+            "Wind" -> "Wind"
+            "Tides" -> "Tides / water level"
+            "Conditions" -> "Conditions"
+            "AirQuality" -> "Air quality"
+            "Visibility" -> "Visibility"
+            "Pressure" -> "Pressure"
+            "UvIndex" -> "UV index"
+            "SpaceWeather" -> "Space weather"
+            else -> id
+        }
+
+        /** Default hamburger menu order (Settings / About stay fixed at the bottom). */
+        val DEFAULT_DRAWER_NAV_ORDER = listOf(
+            "Forecast",
+            "CurrentLocation",
+            "Map",
+            "Sun",
+            "Moon",
+            "SpaceWeather",
+            "Earthquakes",
+            "Storms",
+            "AddCity",
+        )
+
+        fun normalizeDrawerNavOrder(order: List<String>): List<String> {
+            val known = DEFAULT_DRAWER_NAV_ORDER.toSet()
+            val seen = LinkedHashSet<String>()
+            order.forEach { id -> if (id in known) seen.add(id) }
+            DEFAULT_DRAWER_NAV_ORDER.forEach { id -> if (id !in seen) seen.add(id) }
+            return seen.toList()
+        }
+
+        fun defaultDrawerNavConfig(): List<DrawerNavConfigItem> =
+            DEFAULT_DRAWER_NAV_ORDER.map { DrawerNavConfigItem(id = it, enabled = true) }
+
+        fun normalizeDrawerNavConfig(config: List<DrawerNavConfigItem>): List<DrawerNavConfigItem> {
+            val known = DEFAULT_DRAWER_NAV_ORDER.toSet()
+            val enabledById = LinkedHashMap<String, Boolean>()
+            val order = ArrayList<String>()
+            config.forEach { item ->
+                if (item.id in known && item.id !in enabledById) {
+                    enabledById[item.id] = item.enabled
+                    order.add(item.id)
+                }
+            }
+            DEFAULT_DRAWER_NAV_ORDER.forEach { id ->
+                if (id !in enabledById) {
+                    enabledById[id] = true
+                    order.add(id)
+                }
+            }
+            // Always keep Forecast available
+            if (enabledById["Forecast"] == false) enabledById["Forecast"] = true
+            // At least one item enabled
+            if (enabledById.values.none { it }) {
+                enabledById["Forecast"] = true
+            }
+            return order.map { id -> DrawerNavConfigItem(id = id, enabled = enabledById[id] == true) }
+        }
+
+        fun drawerNavDisplayName(id: String): String = when (id) {
+            "Forecast" -> "Forecast"
+            "CurrentLocation" -> "Current Location"
+            "Map" -> "Map"
+            "Sun" -> "Sun"
+            "Moon" -> "Moon"
+            "SpaceWeather" -> "Space Weather"
+            "Earthquakes" -> "Earthquakes"
+            "Storms" -> "Tornado / Hurricane"
+            "AddCity" -> "Add City"
+            else -> id
+        }
     }
 }

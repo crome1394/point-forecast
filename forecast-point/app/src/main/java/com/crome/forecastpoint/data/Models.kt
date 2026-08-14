@@ -108,7 +108,18 @@ data class TideInfo(
     val stationName: String,
     val distanceMiles: Double,
     val unavailableReason: String? = null,
-)
+    /**
+     * Source kind for UI:
+     * - "tide" NOAA coastal predictions (MLLW)
+     * - "waterlevel" NOAA Great Lakes / CO-OPS (LWD)
+     * - "usgs" USGS river/lake gage height
+     */
+    val sourceKind: String = "tide",
+    /** Datum / units label, e.g. "MLLW", "LWD", or "gage". */
+    val datumLabel: String? = null,
+) {
+    val isWaterLevel: Boolean get() = sourceKind == "waterlevel" || sourceKind == "usgs"
+}
 
 @Serializable
 data class WeatherSnapshot(

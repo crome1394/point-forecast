@@ -10,7 +10,8 @@ Third-party data and libraries
 ### National Weather Service / NOAA
 Forecast, observation, alert, and related weather data are provided by the
 U.S. National Weather Service and NOAA through publicly documented services
-(e.g. weather.gov MapClick, api.weather.gov, radar.weather.gov, CO-OPS tides).
+(e.g. weather.gov MapClick, api.weather.gov, radar.weather.gov, CO-OPS tides
+and water levels, NHC tropical cyclone products, SPC storm reports).
 
 This application is not affiliated with, endorsed by, or sponsored by NOAA,
 the National Weather Service, or the U.S. Department of Commerce.
@@ -43,6 +44,18 @@ icon set used on weather.gov (bundled for offline/reliable display).
 
 ### NOAA Space Weather Prediction Center (SWPC)
 Planetary Kp index and geomagnetic scale products from services.swpc.noaa.gov.
+
+### USGS
+Earthquake catalog via the USGS Earthquake Hazards Program FDSN event API
+(https://earthquake.usgs.gov/). Stream and lake stage (parameter 00065) via
+USGS Water Services / NWIS for inland water-level context.
+
+### NOAA National Hurricane Center (NHC)
+Active tropical cyclone list and related public products
+(e.g. https://www.nhc.noaa.gov/CurrentStorms.json).
+
+### NOAA Storm Prediction Center (SPC)
+Preliminary local storm reports (tornado, etc.) from SPC climo report products.
 
 ### Open-Meteo
 Optional hourly extras (air quality / US AQI, UV index, surface pressure, and

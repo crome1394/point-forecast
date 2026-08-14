@@ -720,6 +720,7 @@ private fun createMapView(
 
     return MapView(context).apply {
         setTileSource(CartoLightTiles)
+        // Pinch-to-zoom on; single-finger pan is default and works full-screen
         setMultiTouchControls(true)
         setFlingEnabled(true)
         isTilesScaledToDpi = true

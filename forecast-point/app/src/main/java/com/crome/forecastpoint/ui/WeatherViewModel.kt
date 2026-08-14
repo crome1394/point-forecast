@@ -5,19 +5,23 @@ import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.crome.forecastpoint.data.GeocodeResult
+import com.crome.forecastpoint.data.DrawerNavConfigItem
+import com.crome.forecastpoint.data.EarthquakeService
+import com.crome.forecastpoint.data.HourlyTabConfigItem
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.SavedLocation
+import com.crome.forecastpoint.data.SevereWeatherService
 import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.worker.WeatherUpdateScheduler
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -25,6 +29,8 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = WeatherRepository(app.applicationContext)
     private val prefs = repo.preferences
     private val spaceWeatherService = SpaceWeatherService()
+    private val earthquakeService = EarthquakeService()
+    private val severeWeatherService = SevereWeatherService()
 
     val snapshot: StateFlow<WeatherSnapshot?> = repo.snapshot
     val loading: StateFlow<Boolean> = repo.loading
@@ -46,15 +52,57 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     val mapSearchAtBottom = prefs.mapSearchAtBottom.stateIn(viewModelScope, share, false)
     val expandCurrentConditions =
         prefs.expandCurrentConditions.stateIn(viewModelScope, share, false)
-    val showTidesTab = prefs.showTidesTab.stateIn(viewModelScope, share, true)
-    val showSpaceWeather = prefs.showSpaceWeather.stateIn(viewModelScope, share, true)
-    val showAirQuality = prefs.showAirQuality.stateIn(viewModelScope, share, true)
-    val showVisibility = prefs.showVisibility.stateIn(viewModelScope, share, true)
-    val showPressure = prefs.showPressure.stateIn(viewModelScope, share, true)
-    val showUvIndex = prefs.showUvIndex.stateIn(viewModelScope, share, true)
+    val expandAdvisories = prefs.expandAdvisories.stateIn(viewModelScope, share, true)
+    val showTitleSearch = prefs.showTitleSearch.stateIn(viewModelScope, share, true)
+    val showTitleSunMoon = prefs.showTitleSunMoon.stateIn(viewModelScope, share, true)
+    val hourlyTabConfig = prefs.hourlyTabConfig.stateIn(
+        viewModelScope,
+        share,
+        PreferencesRepository.defaultHourlyTabConfig(),
+    )
+    val drawerNavConfig = prefs.drawerNavConfig.stateIn(
+        viewModelScope,
+        share,
+        PreferencesRepository.defaultDrawerNavConfig(),
+    )
+    val mapFocusRadiusMiles = prefs.mapFocusRadiusMiles.stateIn(
+        viewModelScope,
+        share,
+        PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
+    )
+    val spaceWeatherWatchThreshold =
+        prefs.spaceWeatherWatchThreshold.stateIn(
+            viewModelScope,
+            share,
+            PreferencesRepository.DEFAULT_SW_WATCH_THRESHOLD,
+        )
+    val spaceWeatherActiveThreshold =
+        prefs.spaceWeatherActiveThreshold.stateIn(
+            viewModelScope,
+            share,
+            PreferencesRepository.DEFAULT_SW_ACTIVE_THRESHOLD,
+        )
+    val spaceWeatherForecastHorizonHours =
+        prefs.spaceWeatherForecastHorizonHours.stateIn(
+            viewModelScope,
+            share,
+            PreferencesRepository.DEFAULT_SW_HORIZON_HOURS,
+        )
 
     private val _spaceWeather = MutableStateFlow<SpaceWeatherService.Snapshot?>(null)
     val spaceWeather: StateFlow<SpaceWeatherService.Snapshot?> = _spaceWeather.asStateFlow()
+
+    private val _earthquakes = MutableStateFlow<EarthquakeService.Snapshot?>(null)
+    val earthquakes: StateFlow<EarthquakeService.Snapshot?> = _earthquakes.asStateFlow()
+
+    private val _earthquakesLoading = MutableStateFlow(false)
+    val earthquakesLoading: StateFlow<Boolean> = _earthquakesLoading.asStateFlow()
+
+    private val _severeWeather = MutableStateFlow<SevereWeatherService.Snapshot?>(null)
+    val severeWeather: StateFlow<SevereWeatherService.Snapshot?> = _severeWeather.asStateFlow()
+
+    private val _severeWeatherLoading = MutableStateFlow(false)
+    val severeWeatherLoading: StateFlow<Boolean> = _severeWeatherLoading.asStateFlow()
 
     private val _searchResults = MutableStateFlow<List<GeocodeResult>>(emptyList())
     val searchResults: StateFlow<List<GeocodeResult>> = _searchResults.asStateFlow()
@@ -63,6 +111,8 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     val searching: StateFlow<Boolean> = _searching.asStateFlow()
 
     private var searchJob: Job? = null
+    private var earthquakeJob: Job? = null
+    private var severeWeatherJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -74,23 +124,20 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                 WeatherUpdateScheduler.applyFromPrefs(getApplication())
             }
         }
-        // Load SWPC data when the user wants the Space Weather tab
+        // SWPC is planetary (not city-tied); used by Hourly tab and Sun/Moon summary.
         viewModelScope.launch {
-            prefs.showSpaceWeather.collectLatest { enabled ->
-                if (enabled) {
-                    refreshSpaceWeather()
-                } else {
-                    _spaceWeather.value = null
-                }
-            }
+            refreshSpaceWeather()
         }
     }
 
     fun manualRefresh() {
         viewModelScope.launch {
             runCatching { repo.refreshActive(manual = true) }
-            if (showSpaceWeather.value) {
-                refreshSpaceWeather()
+            refreshSpaceWeather()
+            val snap = snapshot.value
+            if (snap != null) {
+                refreshEarthquakes(snap.latitude, snap.longitude)
+                refreshSevereWeather(snap.latitude, snap.longitude)
             }
         }
     }
@@ -98,6 +145,136 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun refreshSpaceWeather() {
         runCatching {
             _spaceWeather.value = spaceWeatherService.fetch()
+        }
+    }
+
+    /** Load USGS quakes around the active city (or given point). */
+    fun ensureEarthquakes(latitude: Double, longitude: Double) {
+        val radius = mapFocusRadiusMiles.value
+        val current = _earthquakes.value
+        if (current != null &&
+            kotlin.math.abs(current.latitude - latitude) < 0.05 &&
+            kotlin.math.abs(current.longitude - longitude) < 0.05 &&
+            kotlin.math.abs(current.radiusKm - radius * 1.609344) < 5.0 &&
+            System.currentTimeMillis() - current.updatedAtEpochMs < 15 * 60 * 1000L
+        ) {
+            return
+        }
+        earthquakeJob?.cancel()
+        earthquakeJob = viewModelScope.launch {
+            refreshEarthquakes(latitude, longitude)
+        }
+    }
+
+    private suspend fun refreshEarthquakes(latitude: Double, longitude: Double) {
+        _earthquakesLoading.value = true
+        val radius = mapFocusRadiusMiles.value
+        runCatching {
+            _earthquakes.value = earthquakeService.fetchAround(
+                latitude,
+                longitude,
+                focusRadiusMiles = radius,
+            )
+        }.onFailure {
+            _earthquakes.value = EarthquakeService.Snapshot(
+                latitude = latitude,
+                longitude = longitude,
+                radiusKm = 0.0,
+                recentAll = emptyList(),
+                recentNotable = emptyList(),
+                historical = emptyList(),
+                updatedAtEpochMs = System.currentTimeMillis(),
+                error = it.message ?: "Failed to load earthquakes",
+            )
+        }
+        _earthquakesLoading.value = false
+    }
+
+    fun ensureSevereWeather(latitude: Double, longitude: Double) {
+        val radius = mapFocusRadiusMiles.value
+        val current = _severeWeather.value
+        if (current != null &&
+            kotlin.math.abs(current.latitude - latitude) < 0.05 &&
+            kotlin.math.abs(current.longitude - longitude) < 0.05 &&
+            System.currentTimeMillis() - current.updatedAtEpochMs < 10 * 60 * 1000L
+        ) {
+            // Still refresh if focus radius changed (encoded in querySummary)
+            if (current.querySummary.contains("≤$radius mi")) return
+        }
+        severeWeatherJob?.cancel()
+        severeWeatherJob = viewModelScope.launch {
+            refreshSevereWeather(latitude, longitude)
+        }
+    }
+
+    private suspend fun refreshSevereWeather(latitude: Double, longitude: Double) {
+        _severeWeatherLoading.value = true
+        val radius = mapFocusRadiusMiles.value
+        runCatching {
+            _severeWeather.value = severeWeatherService.fetchAround(
+                latitude,
+                longitude,
+                focusRadiusMiles = radius,
+            )
+        }.onFailure {
+            _severeWeather.value = SevereWeatherService.Snapshot(
+                latitude = latitude,
+                longitude = longitude,
+                tropicalStorms = emptyList(),
+                tornadoReports = emptyList(),
+                localAlerts = emptyList(),
+                updatedAtEpochMs = System.currentTimeMillis(),
+                error = it.message ?: "Failed to load severe weather",
+            )
+        }
+        _severeWeatherLoading.value = false
+    }
+
+    /**
+     * Star on Forecast header: add active place to saved cities, or remove it.
+     * Stays on the same weather point either way.
+     */
+    fun toggleActiveFavorite() {
+        viewModelScope.launch {
+            val snap = snapshot.value ?: return@launch
+            val id = activeLocationId.value
+                ?: UUID.nameUUIDFromBytes(
+                    "${snap.latitude},${snap.longitude}".toByteArray(),
+                ).toString()
+            val already = favorites.value.any { it.id == id }
+            if (already) {
+                prefs.removeFavorite(id)
+                prefs.setLastTransientLocation(
+                    SavedLocation(
+                        id = id,
+                        name = snap.locationName,
+                        latitude = snap.latitude,
+                        longitude = snap.longitude,
+                        isFavorite = false,
+                    ),
+                )
+                prefs.setActiveLocationId(id)
+            } else {
+                var name = snap.locationName
+                if (name.equals("Current Location", ignoreCase = true)) {
+                    runCatching {
+                        name = repo.reverseGeocode(snap.latitude, snap.longitude).name
+                    }
+                }
+                val loc = SavedLocation(
+                    id = id,
+                    name = name.ifBlank { snap.locationName },
+                    latitude = snap.latitude,
+                    longitude = snap.longitude,
+                    isFavorite = true,
+                )
+                prefs.upsertFavorite(loc)
+                prefs.setActiveLocationId(id)
+                // Update header name if we reverse-geocoded Current Location
+                if (name != snap.locationName) {
+                    repo.renameFavorite(id, name)
+                }
+            }
         }
     }
 
@@ -224,32 +401,46 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setShowTidesTab(show: Boolean) {
+    fun setExpandAdvisories(expand: Boolean) {
         viewModelScope.launch {
-            prefs.setShowTidesTab(show)
+            prefs.setExpandAdvisories(expand)
         }
     }
 
-    fun setShowSpaceWeather(show: Boolean) {
-        viewModelScope.launch {
-            prefs.setShowSpaceWeather(show)
-        }
+    fun setShowTitleSearch(show: Boolean) {
+        viewModelScope.launch { prefs.setShowTitleSearch(show) }
     }
 
-    fun setShowAirQuality(show: Boolean) {
-        viewModelScope.launch { prefs.setShowAirQuality(show) }
+    fun setShowTitleSunMoon(show: Boolean) {
+        viewModelScope.launch { prefs.setShowTitleSunMoon(show) }
     }
 
-    fun setShowVisibility(show: Boolean) {
-        viewModelScope.launch { prefs.setShowVisibility(show) }
+    fun setHourlyTabConfig(config: List<HourlyTabConfigItem>) {
+        viewModelScope.launch { prefs.setHourlyTabConfig(config) }
     }
 
-    fun setShowPressure(show: Boolean) {
-        viewModelScope.launch { prefs.setShowPressure(show) }
+    fun setDrawerNavOrder(order: List<String>) {
+        viewModelScope.launch { prefs.setDrawerNavOrder(order) }
     }
 
-    fun setShowUvIndex(show: Boolean) {
-        viewModelScope.launch { prefs.setShowUvIndex(show) }
+    fun setDrawerNavConfig(config: List<DrawerNavConfigItem>) {
+        viewModelScope.launch { prefs.setDrawerNavConfig(config) }
+    }
+
+    fun setMapFocusRadiusMiles(miles: Int) {
+        viewModelScope.launch { prefs.setMapFocusRadiusMiles(miles) }
+    }
+
+    fun setSpaceWeatherWatchThreshold(level: Int) {
+        viewModelScope.launch { prefs.setSpaceWeatherWatchThreshold(level) }
+    }
+
+    fun setSpaceWeatherActiveThreshold(level: Int) {
+        viewModelScope.launch { prefs.setSpaceWeatherActiveThreshold(level) }
+    }
+
+    fun setSpaceWeatherForecastHorizonHours(hours: Int) {
+        viewModelScope.launch { prefs.setSpaceWeatherForecastHorizonHours(hours) }
     }
 
     suspend fun searchPlaces(query: String): List<GeocodeResult> = repo.search(query)

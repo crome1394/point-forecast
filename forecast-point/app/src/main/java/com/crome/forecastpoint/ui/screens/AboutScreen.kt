@@ -1,6 +1,9 @@
 package com.crome.forecastpoint.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -11,14 +14,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.BuildConfig
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
+import com.crome.forecastpoint.ui.theme.PrimaryBlue
+
+private const val GITHUB_URL = "https://github.com/crome1394/point-forecast"
 
 @Composable
 fun AboutScreen() {
+    val context = LocalContext.current
     Column(
         Modifier
             .fillMaxSize()
@@ -49,9 +58,33 @@ fun AboutScreen() {
             fontSize = 13.sp,
         )
         Text(
+            "Source code",
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Text(
+            text = GITHUB_URL,
+            color = PrimaryBlue,
+            fontSize = 14.sp,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .clickable {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)),
+                        )
+                    }
+                },
+        )
+        Text(
             "Data & libraries\n" +
                 "• Forecasts & alerts: National Weather Service (weather.gov / api.weather.gov)\n" +
-                "• Tides: NOAA CO-OPS\n" +
+                "• Tides / water levels: NOAA CO-OPS (coastal tides, Great Lakes) + USGS NWIS stage (rivers & inland lakes)\n" +
+                "• Earthquakes: USGS Earthquake Hazards Program (FDSN)\n" +
+                "• Tornado / hurricane: NHC active storms, SPC reports, NWS alerts\n" +
                 "• Space weather: NOAA SWPC\n" +
                 "• Air quality / UV / pressure: Open-Meteo\n" +
                 "• Map tiles: OpenStreetMap / CARTO (via osmdroid)\n" +
