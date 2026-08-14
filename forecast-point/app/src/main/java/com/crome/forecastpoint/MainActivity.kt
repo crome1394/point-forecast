@@ -16,7 +16,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,14 +32,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -45,6 +50,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,6 +62,7 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -80,14 +87,17 @@ import androidx.core.content.ContextCompat
 import com.crome.forecastpoint.data.SavedLocation
 import com.crome.forecastpoint.ui.WeatherViewModel
 import com.crome.forecastpoint.ui.screens.AboutScreen
+import com.crome.forecastpoint.ui.screens.CelestialBody
 import com.crome.forecastpoint.ui.screens.ForecastScreen
 import com.crome.forecastpoint.ui.screens.HourlyScreen
 import com.crome.forecastpoint.ui.screens.MapScreen
 import com.crome.forecastpoint.ui.screens.SearchScreen
 import com.crome.forecastpoint.ui.screens.SettingsScreen
+import com.crome.forecastpoint.ui.screens.SunMoonScreen
 import com.crome.forecastpoint.ui.theme.ForecastPointTheme
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
+import com.crome.forecastpoint.util.CelestialCalculator
 import com.crome.forecastpoint.util.RadarUrl
 import kotlinx.coroutines.launch
 
@@ -130,6 +140,8 @@ class MainActivity : ComponentActivity() {
                 /** City being renamed (shows text field dialog). */
                 var cityRenameTarget by remember { mutableStateOf<SavedLocation?>(null) }
                 var cityRenameText by remember { mutableStateOf("") }
+                var sunMoonMenuOpen by remember { mutableStateOf(false) }
+                var sunMoonBody by remember { mutableStateOf(CelestialBody.Sun) }
 
                 // System back / gesture: nested screens → main forecast (not exit app)
                 BackHandler(enabled = screen != AppScreen.Forecast || drawerState.isOpen) {
@@ -137,6 +149,7 @@ class MainActivity : ComponentActivity() {
                         drawerState.isOpen -> scope.launch { drawerState.close() }
                         cityRenameTarget != null -> cityRenameTarget = null
                         cityActionTarget != null -> cityActionTarget = null
+                        sunMoonMenuOpen -> sunMoonMenuOpen = false
                         screen != AppScreen.Forecast -> screen = AppScreen.Forecast
                     }
                 }
@@ -148,6 +161,18 @@ class MainActivity : ComponentActivity() {
                     AppScreen.Map -> "Map"
                     AppScreen.Settings -> "Settings"
                     AppScreen.About -> "About"
+                    AppScreen.SunMoon -> if (sunMoonBody == CelestialBody.Sun) {
+                        "Sun"
+                    } else {
+                        "Moon"
+                    }
+                }
+
+                // Title-bar icon: sun by day, moon by night at the active (or default) point
+                val celestialLat = snapshot?.latitude ?: 39.8283
+                val celestialLon = snapshot?.longitude ?: -98.5795
+                val showDayIcon = remember(celestialLat, celestialLon, snapshot?.updatedAtEpochMs) {
+                    CelestialCalculator.isDaytime(celestialLat, celestialLon)
                 }
 
                 val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -330,6 +355,32 @@ class MainActivity : ComponentActivity() {
                                             IconButton(onClick = { openAddCity() }) {
                                                 Icon(Icons.Filled.Search, contentDescription = "Add City")
                                             }
+                                            Box {
+                                                IconButton(onClick = { sunMoonMenuOpen = true }) {
+                                                    Icon(
+                                                        imageVector = if (showDayIcon) {
+                                                            Icons.Filled.WbSunny
+                                                        } else {
+                                                            Icons.Filled.NightsStay
+                                                        },
+                                                        contentDescription = "Sun and moon",
+                                                        tint = if (showDayIcon) {
+                                                            Color(0xFFFFE082)
+                                                        } else {
+                                                            Color(0xFFBBDEFB)
+                                                        },
+                                                    )
+                                                }
+                                                SunMoonPickerMenu(
+                                                    expanded = sunMoonMenuOpen,
+                                                    onDismiss = { sunMoonMenuOpen = false },
+                                                    onPick = { body ->
+                                                        sunMoonBody = body
+                                                        sunMoonMenuOpen = false
+                                                        screen = AppScreen.SunMoon
+                                                    },
+                                                )
+                                            }
                                             IconButton(onClick = { openRadar() }) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.ic_radar_colorful),
@@ -387,6 +438,32 @@ class MainActivity : ComponentActivity() {
                                                     Icons.Filled.Search,
                                                     contentDescription = "Add City",
                                                     tint = Color.White,
+                                                )
+                                            }
+                                            Box {
+                                                IconButton(onClick = { sunMoonMenuOpen = true }) {
+                                                    Icon(
+                                                        imageVector = if (showDayIcon) {
+                                                            Icons.Filled.WbSunny
+                                                        } else {
+                                                            Icons.Filled.NightsStay
+                                                        },
+                                                        contentDescription = "Sun and moon",
+                                                        tint = if (showDayIcon) {
+                                                            Color(0xFFFFE082)
+                                                        } else {
+                                                            Color(0xFFBBDEFB)
+                                                        },
+                                                    )
+                                                }
+                                                SunMoonPickerMenu(
+                                                    expanded = sunMoonMenuOpen,
+                                                    onDismiss = { sunMoonMenuOpen = false },
+                                                    onPick = { body ->
+                                                        sunMoonBody = body
+                                                        sunMoonMenuOpen = false
+                                                        screen = AppScreen.SunMoon
+                                                    },
                                                 )
                                             }
                                             IconButton(onClick = { openRadar() }) {
@@ -494,6 +571,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
                                 AppScreen.About -> AboutScreen()
+                                AppScreen.SunMoon -> SunMoonScreen(
+                                    latitude = celestialLat,
+                                    longitude = celestialLon,
+                                    locationName = snapshot?.locationName,
+                                    initialBody = sunMoonBody,
+                                )
                             }
                         }
                     }
@@ -527,7 +610,69 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppScreen { Forecast, Hourly, Search, Map, Settings, About }
+@Composable
+private fun SunMoonPickerMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onPick: (CelestialBody) -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1B262C),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "Sun & moon",
+                color = Color(0xFFB0BEC5),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+            CelestialMenuPill(
+                icon = Icons.Filled.WbSunny,
+                label = "Sun",
+                tint = Color(0xFFFFB300),
+                onClick = { onPick(CelestialBody.Sun) },
+            )
+            CelestialMenuPill(
+                icon = Icons.Filled.DarkMode,
+                label = "Moon",
+                tint = Color(0xFF90CAF9),
+                onClick = { onPick(CelestialBody.Moon) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CelestialMenuPill(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = tint.copy(alpha = 0.18f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        }
+    }
+}
+
+private enum class AppScreen { Forecast, Hourly, Search, Map, Settings, About, SunMoon }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

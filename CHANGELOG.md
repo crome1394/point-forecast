@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Title bar **sun/moon** control (icon follows day/night at the active location). Opens a pill menu for **Sun** or **Moon**, then a summary screen with multi-day strip, altitude path chart, rise/set times, civil twilight / solar noon (sun), phase & illumination (moon), and short explainers.
+
 ## [1.0.3] — 2026-08-14
 
 Publish-ready build: display name **Point Forecast**, hourly extras, map/search polish, and bug fixes since 1.0.2.
