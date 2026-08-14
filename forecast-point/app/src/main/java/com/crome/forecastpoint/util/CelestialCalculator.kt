@@ -95,20 +95,31 @@ object CelestialCalculator {
         longitude: Double,
         timeZone: TimeZone = TimeZone.getDefault(),
         day: Calendar = Calendar.getInstance(timeZone),
+        /**
+         * When true, phase/illumination use the current instant (best for “today”).
+         * When false, use local noon on [day] (for past/future day pages).
+         */
+        useCurrentInstantForPhase: Boolean = false,
     ): MoonDay {
-        val jd0 = julianDayAtLocalMidnight(day, timeZone)
-        val phase = moonPhase(jd0 + 0.5) // mid-day-ish
+        val phaseJd = if (useCurrentInstantForPhase) {
+            System.currentTimeMillis() / 86400000.0 + 2440587.5
+        } else {
+            julianDayAtLocalMidnight(day, timeZone) + 0.5
+        }
+        val phase = moonPhase(phaseJd)
         val (rise, set) = moonRiseSet(latitude, longitude, timeZone, day)
         val alts = (0..24).map { h ->
             moonAltitudeDeg(latitude, longitude, timeZone, day, h.toDouble()).toFloat()
         }
+        // Nearest percent (not truncate) — near new moon 2.6% was showing as “2%”
+        val pct = kotlin.math.round(phase.illumination * 100.0).toInt().coerceIn(0, 100)
         return MoonDay(
             moonriseHours = rise,
             moonsetHours = set,
             moonrise = formatTime(rise ?: Double.NaN),
             moonset = formatTime(set ?: Double.NaN),
             phaseName = phase.name,
-            illuminationPct = (phase.illumination * 100).toInt().coerceIn(0, 100),
+            illuminationPct = pct,
             ageDays = phase.ageDays,
             isWaxing = phase.isWaxing,
             altitudeByHour = alts,
@@ -225,24 +236,44 @@ object CelestialCalculator {
         val isWaxing: Boolean,
     )
 
+    /**
+     * Illuminated fraction from Meeus-style phase angle (Astronomical Algorithms).
+     * Matches common sky apps within a couple of percent; near new moon small
+     * differences (e.g. 3% vs 4–7%) are normal across sources and definitions.
+     */
     private fun moonPhase(jd: Double): PhaseInfo {
-        // Days since known new moon (approx)
-        val daysSinceNew = jd - 2451550.1
+        val t = (jd - 2451545.0) / 36525.0
+        val d = normalize360(297.8501921 + 445267.1114034 * t) // mean elongation °
+        val m = normalize360(357.5291092 + 35999.0502909 * t) // sun mean anomaly °
+        val mp = normalize360(134.9633964 + 477198.8675055 * t) // moon mean anomaly °
+
+        // Phase angle i (°) — ~180° at new moon, ~0° at full
+        var i = 180.0 - d -
+            6.289 * sin(rad(mp)) +
+            2.100 * sin(rad(m)) -
+            1.274 * sin(rad(2 * d - mp)) -
+            0.658 * sin(rad(2 * d)) -
+            0.214 * sin(rad(2 * mp)) -
+            0.110 * sin(rad(d))
+        i = abs(i % 360.0)
+        if (i > 180.0) i = 360.0 - i
+
+        // Illuminated fraction of the disc (0 = new, 1 = full)
+        val illum = ((1.0 + cos(rad(i))) / 2.0).coerceIn(0.0, 1.0)
+
         val synodic = 29.530588853
-        val age = ((daysSinceNew % synodic) + synodic) % synodic
-        val phase = age / synodic // 0..1
-        val illum = (1 - cos(2 * PI * phase)) / 2.0
-        val isWaxing = phase < 0.5
+        // Age from mean elongation (0 at mean new moon)
+        val age = synodic * d / 360.0
+        val isWaxing = d < 180.0
         val name = when {
-            age < 1.84566 -> "New moon"
+            age < 1.84566 || age >= 27.68493 -> "New moon"
             age < 5.53699 -> "Waxing crescent"
             age < 9.22831 -> "First quarter"
             age < 12.91963 -> "Waxing gibbous"
             age < 16.61096 -> "Full moon"
             age < 20.30228 -> "Waning gibbous"
             age < 23.99361 -> "Last quarter"
-            age < 27.68493 -> "Waning crescent"
-            else -> "New moon"
+            else -> "Waning crescent"
         }
         return PhaseInfo(name, illum, age, isWaxing)
     }

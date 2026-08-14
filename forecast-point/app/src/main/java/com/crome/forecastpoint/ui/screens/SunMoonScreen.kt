@@ -223,7 +223,14 @@ fun SunMoonScreen(
                 CelestialCalculator.sunDay(latitude, longitude, tz, dayCal)
             }
             val moon = remember(latitude, longitude, off) {
-                CelestialCalculator.moonDay(latitude, longitude, tz, dayCal)
+                CelestialCalculator.moonDay(
+                    latitude = latitude,
+                    longitude = longitude,
+                    timeZone = tz,
+                    day = dayCal,
+                    // “Today” uses the current clock so % lit matches sky apps more closely
+                    useCurrentInstantForPhase = off == 0,
+                )
             }
             DayDetailContent(
                 body = body,
@@ -377,9 +384,11 @@ private fun DayDetailContent(
                                 "Phase and illumination describe how much of the moon’s Earth-facing side " +
                                 "is sunlit. Waxing means growing toward full; waning means shrinking " +
                                 "toward new.\n\n" +
-                                "The phase cycle is about 29.5 days. Northern lights chances rise with " +
-                                "geomagnetic activity (see Hourly → Space Wx), not moon phase alone—though " +
-                                "a bright full moon can wash out fainter auroras."
+                                "The phase cycle is about 29.5 days. Illumination is the fraction of the " +
+                                "moon’s disc that is sunlit (approximate). Near new moon, apps often differ " +
+                                "by a few percent (e.g. 3% vs 4–7%) depending on formula and exact time.\n\n" +
+                                "Northern lights chances rise with geomagnetic activity (Hourly → Space Wx), " +
+                                "not moon phase alone—though a bright full moon can wash out fainter auroras."
                         },
                         color = Color(0xFFCFD8DC),
                         fontSize = 13.sp,
