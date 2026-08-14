@@ -82,7 +82,9 @@ fun AboutScreen() {
         Text(
             "Data & libraries\n" +
                 "• Forecasts & alerts: National Weather Service (weather.gov / api.weather.gov)\n" +
-                "• Tides: NOAA CO-OPS\n" +
+                "• Tides / water levels: NOAA CO-OPS (coastal tides, Great Lakes) + USGS NWIS stage (rivers & inland lakes)\n" +
+                "• Earthquakes: USGS Earthquake Hazards Program (FDSN)\n" +
+                "• Tornado / hurricane: NHC active storms, SPC reports, NWS alerts\n" +
                 "• Space weather: NOAA SWPC\n" +
                 "• Air quality / UV / pressure: Open-Meteo\n" +
                 "• Map tiles: OpenStreetMap / CARTO (via osmdroid)\n" +

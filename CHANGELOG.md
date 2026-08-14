@@ -9,7 +9,38 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Title bar **sun/moon** control (icon follows day/night at the active location). Opens a pill menu for **Sun** or **Moon**, then a summary screen with multi-day strip, altitude path chart, rise/set times, civil twilight / solar noon (sun), phase & illumination (moon), and short explainers.
+- **Celestial / hazards hub** from the title-bar sun/moon control and the drawer:
+  - **Sun** and **Moon** summaries (day strip, altitude chart with axis labels, rise/set, twilight / phase)
+  - **Space weather** summary (NOAA SWPC G/R/S scales, Kp chart, about section)
+  - **Earthquakes** summary (USGS FDSN; map + recent M1+/M2.5+ and historical M4+ tables)
+  - **Tornado / Hurricane** summary (NHC active storms, SPC tornado reports, NWS local alerts)
+- **Title-bar body tabs** when viewing celestial screens (switch Sun / Moon / Space Wx / Earthquakes / Storms without reopening the menu)
+- **Space weather title-bar cue** (icon tint + bolt when conditions are elevated; not a system notification)
+- Settings for space weather cue: Watch threshold, Active threshold, forecast look-ahead
+- **Reorderable hamburger menu** (long-press drag); Settings to show/hide menu items
+- **Hourly tab order + enable** unified in Settings (all tabs, including Temperature / Conditions)
+- **Pull-to-refresh** on the main Forecast screen
+- Favorite **star** toggles save/remove of the active location (including Current Location, with reverse-geocode name)
+- Map **focus radius** setting (default 250 mi) for earthquake and tornado/hurricane maps
+- Full-screen expand control on hazard maps; one-finger pan in scrollable screens
+- Light basemap on hazard maps for readability
+
+### Changed
+
+- **Tides / water levels** for more locations:
+  - NOAA CO-OPS tide predictions (coastal)
+  - NOAA subordinate/offset stations (e.g. Sacramento, Clarksburg) via high/low + interpolation or reference offsets
+  - Great Lakes water levels (LWD / OFS)
+  - USGS NWIS gage height for rivers and inland lakes
+- Settings reorganized into categories (Title bar, Main screen, Map, Hamburger menu, Hourly tabs, Space weather cue, Widget, Updates)
+- Advisories expand behavior is optional (Settings → Expand advisories & alerts)
+- Title bar search and sun/moon icons can be hidden independently
+
+### Fixed
+
+- Subordinate NOAA tide stations returning no hourly series (now use hilo + offsets)
+- Drawer drag-reorder cancelling mid-gesture
+- Earthquake lists clearer vs other apps (M2.5+ vs M1+, distance order, focus radius on history)
 
 ## [1.0.3] — 2026-08-14
 

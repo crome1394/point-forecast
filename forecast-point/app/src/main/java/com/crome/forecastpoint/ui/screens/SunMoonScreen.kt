@@ -9,9 +9,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,6 +54,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.crome.forecastpoint.data.EarthquakeService
+import com.crome.forecastpoint.data.SevereWeatherService
+import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
@@ -62,7 +69,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.launch
 
-enum class CelestialBody { Sun, Moon }
+/** Targets from the title-bar celestial menu / body switcher. */
+enum class CelestialBody { Sun, Moon, SpaceWeather, Earthquakes, Storms }
 
 /** Day offsets relative to today: yesterday … +5 days. */
 private val DayOffsets = (-1..5).toList()
@@ -72,11 +80,58 @@ fun SunMoonScreen(
     latitude: Double,
     longitude: Double,
     locationName: String?,
-    initialBody: CelestialBody = CelestialBody.Sun,
-    /** When true (title bar at bottom of app), Sun/Moon pills sit above the date strip at the bottom. */
-    titleBarAtBottom: Boolean = false,
+    /** Controlled from the title bar (Sun / Moon / Space weather / Earthquakes). */
+    body: CelestialBody,
+    spaceWeather: SpaceWeatherService.Snapshot? = null,
+    spaceWeatherWatchThreshold: Int = 1,
+    spaceWeatherActiveThreshold: Int = 2,
+    spaceWeatherForecastHorizonHours: Int = 48,
+    earthquakes: EarthquakeService.Snapshot? = null,
+    earthquakesLoading: Boolean = false,
+    onEnsureEarthquakes: (() -> Unit)? = null,
+    severeWeather: SevereWeatherService.Snapshot? = null,
+    severeWeatherLoading: Boolean = false,
+    onEnsureSevereWeather: (() -> Unit)? = null,
+    mapFocusRadiusMiles: Int = 250,
 ) {
-    var body by remember(initialBody) { mutableStateOf(initialBody) }
+    if (body == CelestialBody.SpaceWeather) {
+        SpaceWeatherSummaryScreen(
+            snapshot = spaceWeather,
+            watchThreshold = spaceWeatherWatchThreshold,
+            activeThreshold = spaceWeatherActiveThreshold,
+            forecastHorizonHours = spaceWeatherForecastHorizonHours,
+        )
+        return
+    }
+    if (body == CelestialBody.Earthquakes) {
+        LaunchedEffect(latitude, longitude, mapFocusRadiusMiles) {
+            onEnsureEarthquakes?.invoke()
+        }
+        EarthquakeSummaryScreen(
+            latitude = latitude,
+            longitude = longitude,
+            locationName = locationName,
+            snapshot = earthquakes,
+            loading = earthquakesLoading,
+            mapFocusRadiusMiles = mapFocusRadiusMiles,
+        )
+        return
+    }
+    if (body == CelestialBody.Storms) {
+        LaunchedEffect(latitude, longitude, mapFocusRadiusMiles) {
+            onEnsureSevereWeather?.invoke()
+        }
+        SevereWeatherSummaryScreen(
+            latitude = latitude,
+            longitude = longitude,
+            locationName = locationName,
+            snapshot = severeWeather,
+            loading = severeWeatherLoading,
+            mapFocusRadiusMiles = mapFocusRadiusMiles,
+        )
+        return
+    }
+
     var aboutExpanded by remember { mutableStateOf(false) }
     val tz = remember { TimeZone.getDefault() }
     val today = remember {
@@ -88,7 +143,6 @@ fun SunMoonScreen(
         }
     }
 
-    // Page 0 = yesterday, page 1 = today, … (swipe left/right like Hourly tabs)
     val dayPagerState = rememberPagerState(
         initialPage = DayOffsets.indexOf(0).coerceAtLeast(0),
         pageCount = { DayOffsets.size },
@@ -99,36 +153,7 @@ fun SunMoonScreen(
     val dateFmt = remember { SimpleDateFormat("d", Locale.US) }
     val monthFmt = remember { SimpleDateFormat("MMM", Locale.US) }
 
-    @Composable
-    fun BodyPills() {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            CelestialPill(
-                selected = body == CelestialBody.Sun,
-                icon = Icons.Filled.WbSunny,
-                label = "Sun",
-                onClick = {
-                    body = CelestialBody.Sun
-                    aboutExpanded = false
-                },
-                selectedColor = Color(0xFFFFB300),
-            )
-            CelestialPill(
-                selected = body == CelestialBody.Moon,
-                icon = Icons.Filled.DarkMode,
-                label = "Moon",
-                onClick = {
-                    body = CelestialBody.Moon
-                    aboutExpanded = false
-                },
-                selectedColor = Color(0xFF90CAF9),
-            )
-        }
-    }
+    LaunchedEffect(body) { aboutExpanded = false }
 
     @Composable
     fun DayStrip() {
@@ -189,20 +214,15 @@ fun SunMoonScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        if (!titleBarAtBottom) {
-            BodyPills()
-        }
-
         locationName?.takeIf { it.isNotBlank() }?.let {
             Text(
                 text = it,
                 color = OnSurfaceMuted,
                 fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
-        // Swipe between days (same HorizontalPager pattern as Hourly tabs)
         HorizontalPager(
             state = dayPagerState,
             modifier = Modifier
@@ -228,7 +248,6 @@ fun SunMoonScreen(
                     longitude = longitude,
                     timeZone = tz,
                     day = dayCal,
-                    // “Today” uses the current clock so % lit matches sky apps more closely
                     useCurrentInstantForPhase = off == 0,
                 )
             }
@@ -240,13 +259,8 @@ fun SunMoonScreen(
                 onAboutToggle = { aboutExpanded = !aboutExpanded },
             )
         }
-        // Dates always at bottom
-        DayStrip()
 
-        // Sun/Moon pills at bottom when app title bar is bottom-docked
-        if (titleBarAtBottom) {
-            BodyPills()
-        }
+        DayStrip()
     }
 }
 
@@ -258,6 +272,9 @@ private fun DayDetailContent(
     aboutExpanded: Boolean,
     onAboutToggle: () -> Unit,
 ) {
+    // Space weather is handled by SpaceWeatherSummaryScreen
+    if (body == CelestialBody.SpaceWeather) return
+
     val alts = if (body == CelestialBody.Sun) sun.altitudeByHour else moon.altitudeByHour
     val pathColor = if (body == CelestialBody.Sun) Color(0xFFFFB300) else Color(0xFF90CAF9)
     val fillColor = pathColor.copy(alpha = 0.25f)
@@ -268,27 +285,38 @@ private fun DayDetailContent(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 12.dp),
     ) {
+        Text(
+            if (body == CelestialBody.Sun) {
+                "Sun altitude above the horizon"
+            } else {
+                "Moon altitude above the horizon"
+            },
+            color = OnSurfaceMuted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         AltitudeChart(
             altitudes = alts,
             pathColor = pathColor,
             fillColor = fillColor,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(160.dp)
+                .height(190.dp)
                 .padding(horizontal = 8.dp),
         )
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            listOf("06:00", "12:00", "18:00").forEach {
-                Text(it, color = OnSurfaceMuted, fontSize = 11.sp)
-            }
-        }
+        Text(
+            if (body == CelestialBody.Sun) {
+                "Peak = highest altitude (near solar noon). 0° = horizon; below 0° = below horizon."
+            } else {
+                "Peak = highest altitude for the night. 0° = horizon; below 0° = below horizon."
+            },
+            color = OnSurfaceMuted,
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
         Surface(
             Modifier
@@ -402,41 +430,6 @@ private fun DayDetailContent(
 }
 
 @Composable
-private fun CelestialPill(
-    selected: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    selectedColor: Color,
-) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = if (selected) selectedColor.copy(alpha = 0.25f) else SurfaceDark,
-        modifier = Modifier
-            .height(40.dp)
-            .clickable(onClick = onClick),
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = if (selected) selectedColor else OnSurfaceMuted,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                label,
-                color = if (selected) Color.White else OnSurfaceMuted,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            )
-        }
-    }
-}
-
-@Composable
 private fun InfoRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     iconTint: Color,
@@ -456,63 +449,128 @@ private fun AltitudeChart(
     fillColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier = modifier) {
-        if (altitudes.size < 2) return@Canvas
-        val w = size.width
-        val h = size.height
-        val minA = min(-10f, altitudes.minOrNull() ?: -10f)
-        val maxA = max(60f, altitudes.maxOrNull() ?: 60f)
-        val range = (maxA - minA).coerceAtLeast(1f)
+    if (altitudes.size < 2) return
 
-        fun xAt(i: Int): Float = w * i / (altitudes.size - 1).toFloat()
-        fun yAt(a: Float): Float = h * (1f - (a - minA) / range)
+    val minA = min(-10f, altitudes.minOrNull() ?: -10f)
+    val maxA = max(60f, altitudes.maxOrNull() ?: 60f)
+    val peakAlt = altitudes.maxOrNull() ?: 0f
+    val peakIdx = altitudes.indices.maxByOrNull { altitudes[it] } ?: 12
+    val range = (maxA - minA).coerceAtLeast(1f)
+    // Y ticks: max, horizon (0°) if in range, min
+    val yTicks = buildList {
+        add(maxA)
+        if (minA < -1f && maxA > 5f) add(0f)
+        add(minA)
+    }.distinctBy { (it * 10).toInt() }
 
-        val y0 = yAt(0f)
-        drawLine(
-            color = Color(0xFF546E7A),
-            start = Offset(0f, y0),
-            end = Offset(w, y0),
-            strokeWidth = 1.5f,
-        )
+    fun fracFromTop(a: Float): Float = (1f - (a - minA) / range).coerceIn(0f, 1f)
 
-        val path = Path()
-        val fill = Path()
-        altitudes.forEachIndexed { i, a ->
-            val x = xAt(i)
-            val y = yAt(a)
-            if (i == 0) {
-                path.moveTo(x, y)
-                fill.moveTo(x, y0)
-                fill.lineTo(x, y)
-            } else {
-                path.lineTo(x, y)
-                fill.lineTo(x, y)
+    Row(modifier = modifier) {
+        // Y-axis: altitude in degrees (aligned to plot scale)
+        BoxWithConstraints(
+            Modifier
+                .fillMaxHeight()
+                .padding(end = 4.dp, bottom = 22.dp)
+                .width(44.dp),
+        ) {
+            val plotH = maxHeight
+            yTicks.forEach { tick ->
+                val yDp = plotH * fracFromTop(tick)
+                Text(
+                    text = if (tick == 0f) "0°" else "${tick.toInt()}°",
+                    color = if (tick == 0f) Color(0xFF90A4AE) else OnSurfaceMuted,
+                    fontSize = 10.sp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(y = yDp - 7.dp),
+                )
             }
         }
-        fill.lineTo(xAt(altitudes.lastIndex), y0)
-        fill.close()
 
-        drawPath(
-            fill,
-            brush = Brush.verticalGradient(
-                listOf(fillColor, Color.Transparent),
-                startY = 0f,
-                endY = h,
-            ),
-        )
-        drawPath(
-            path,
-            color = pathColor,
-            style = Stroke(width = 3.5f, cap = StrokeCap.Round),
-        )
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
 
-        val peakIdx = altitudes.indices.maxByOrNull { altitudes[it] } ?: 12
-        if (altitudes[peakIdx] > 0) {
-            drawCircle(
-                color = pathColor,
-                radius = 6f,
-                center = Offset(xAt(peakIdx), yAt(altitudes[peakIdx])),
-            )
+                    fun xAt(i: Int): Float = w * i / (altitudes.size - 1).toFloat()
+                    fun yAt(a: Float): Float = h * (1f - (a - minA) / range)
+
+                    val y0 = yAt(0f)
+                    if (0f in minA..maxA) {
+                        drawLine(
+                            color = Color(0xFF546E7A),
+                            start = Offset(0f, y0),
+                            end = Offset(w, y0),
+                            strokeWidth = 1.5f,
+                        )
+                    }
+                    drawLine(Color(0x22455A64), Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1f)
+                    drawLine(Color(0x22455A64), Offset(0f, h), Offset(w, h), strokeWidth = 1f)
+
+                    val path = Path()
+                    val fill = Path()
+                    altitudes.forEachIndexed { i, a ->
+                        val x = xAt(i)
+                        val y = yAt(a)
+                        if (i == 0) {
+                            path.moveTo(x, y)
+                            fill.moveTo(x, y0.coerceIn(0f, h))
+                            fill.lineTo(x, y)
+                        } else {
+                            path.lineTo(x, y)
+                            fill.lineTo(x, y)
+                        }
+                    }
+                    fill.lineTo(xAt(altitudes.lastIndex), y0.coerceIn(0f, h))
+                    fill.close()
+
+                    drawPath(
+                        fill,
+                        brush = Brush.verticalGradient(
+                            listOf(fillColor, Color.Transparent),
+                            startY = 0f,
+                            endY = h,
+                        ),
+                    )
+                    drawPath(
+                        path,
+                        color = pathColor,
+                        style = Stroke(width = 3.5f, cap = StrokeCap.Round),
+                    )
+
+                    if (peakAlt > 0) {
+                        drawCircle(
+                            color = pathColor,
+                            radius = 6f,
+                            center = Offset(xAt(peakIdx), yAt(peakAlt)),
+                        )
+                    }
+                }
+
+                if (peakAlt > 0) {
+                    Text(
+                        "peak ${peakAlt.toInt()}°",
+                        color = pathColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                    )
+                }
+            }
+
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                listOf("00:00", "06:00", "12:00", "18:00", "24:00").forEach {
+                    Text(it, color = OnSurfaceMuted, fontSize = 10.sp)
+                }
+            }
         }
     }
 }

@@ -28,10 +28,12 @@ import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +61,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForecastScreen(
     snapshot: WeatherSnapshot?,
@@ -66,11 +69,13 @@ fun ForecastScreen(
     error: String?,
     isFavorite: Boolean,
     expandCurrentConditions: Boolean = false,
+    expandAdvisories: Boolean = true,
     onToggleFavorite: () -> Unit,
     onOpenHourly: () -> Unit,
     onDayClick: (DayForecast) -> Unit,
     onAddCity: () -> Unit = {},
     onOpenMap: () -> Unit = {},
+    onRefresh: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -82,82 +87,79 @@ fun ForecastScreen(
             return
         }
 
-        // LazyColumn: only visible day cards compose → smoother scroll
-        LazyColumn(Modifier.fillMaxSize()) {
-            if (snapshot != null) {
-                item(key = "header") {
-                    LocationHeader(
-                        snapshot = snapshot,
-                        isFavorite = isFavorite,
-                        onToggleFavorite = onToggleFavorite,
-                    )
-                }
-                item(key = "current") {
-                    CurrentConditionsCard(
-                        current = snapshot.current,
-                        snapshot = snapshot,
-                        expandByDefault = expandCurrentConditions,
-                    )
-                }
-                if (error != null) {
-                    item(key = "error") {
-                        Text(
-                            text = error,
-                            color = Color(0xFFEF9A9A),
-                            modifier = Modifier.padding(16.dp),
-                            fontSize = 13.sp,
+        PullToRefreshBox(
+            isRefreshing = loading && snapshot != null,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // LazyColumn: only visible day cards compose → smoother scroll
+            LazyColumn(Modifier.fillMaxSize()) {
+                if (snapshot != null) {
+                    item(key = "header") {
+                        LocationHeader(
+                            snapshot = snapshot,
+                            isFavorite = isFavorite,
+                            onToggleFavorite = onToggleFavorite,
                         )
                     }
-                }
-                itemsIndexed(
-                    items = snapshot.days,
-                    key = { index, day -> "${index}|${day.dateLabel}|${day.dayName}" },
-                    contentType = { _, _ -> "day" },
-                ) { _, day ->
-                    DayCard(day = day, onClick = { onDayClick(day); onOpenHourly() })
-                }
-                item(key = "bottom_pad") { Spacer(Modifier.height(24.dp)) }
-            } else {
-                item(key = "empty") {
-                    Column(Modifier.padding(24.dp)) {
-                        Text(
-                            text = error
-                                ?: "No city selected yet.\n\nAdd a city by search, map, or current location.",
-                            color = OnSurfaceMuted,
-                            fontSize = 15.sp,
+                    item(key = "current") {
+                        CurrentConditionsCard(
+                            current = snapshot.current,
+                            snapshot = snapshot,
+                            expandByDefault = expandCurrentConditions,
+                            expandAdvisories = expandAdvisories,
                         )
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            text = "Add City",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
-                            modifier = Modifier
-                                .clickable(onClick = onAddCity)
-                                .padding(vertical = 8.dp),
-                        )
-                        Text(
-                            text = "Open Map",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
-                            modifier = Modifier
-                                .clickable(onClick = onOpenMap)
-                                .padding(vertical = 8.dp),
-                        )
+                    }
+                    if (error != null) {
+                        item(key = "error") {
+                            Text(
+                                text = error,
+                                color = Color(0xFFEF9A9A),
+                                modifier = Modifier.padding(16.dp),
+                                fontSize = 13.sp,
+                            )
+                        }
+                    }
+                    itemsIndexed(
+                        items = snapshot.days,
+                        key = { index, day -> "${index}|${day.dateLabel}|${day.dayName}" },
+                        contentType = { _, _ -> "day" },
+                    ) { _, day ->
+                        DayCard(day = day, onClick = { onDayClick(day); onOpenHourly() })
+                    }
+                    item(key = "bottom_pad") { Spacer(Modifier.height(24.dp)) }
+                } else {
+                    item(key = "empty") {
+                        Column(Modifier.padding(24.dp)) {
+                            Text(
+                                text = error
+                                    ?: "No city selected yet.\n\nAdd a city by search, map, or current location.\n\nPull down to refresh when a city is loaded.",
+                                color = OnSurfaceMuted,
+                                fontSize = 15.sp,
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                text = "Add City",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                modifier = Modifier
+                                    .clickable(onClick = onAddCity)
+                                    .padding(vertical = 8.dp),
+                            )
+                            Text(
+                                text = "Open Map",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                modifier = Modifier
+                                    .clickable(onClick = onOpenMap)
+                                    .padding(vertical = 8.dp),
+                            )
+                        }
                     }
                 }
             }
-        }
-
-        if (loading && snapshot != null) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 8.dp)
-                    .size(24.dp),
-                strokeWidth = 2.dp,
-            )
         }
     }
 }
@@ -192,7 +194,11 @@ private fun LocationHeader(
         IconButton(onClick = onToggleFavorite) {
             Icon(
                 imageVector = Icons.Filled.Star,
-                contentDescription = "Favorite",
+                contentDescription = if (isFavorite) {
+                    "Remove from saved cities"
+                } else {
+                    "Save city to favorites"
+                },
                 tint = if (isFavorite) Amber else OnSurfaceMuted,
             )
         }
@@ -204,11 +210,12 @@ private fun CurrentConditionsCard(
     current: CurrentConditions,
     snapshot: WeatherSnapshot,
     expandByDefault: Boolean = false,
+    expandAdvisories: Boolean = true,
 ) {
     val hazards = snapshot.hazards
-    // Hazards always start expanded; otherwise honor Settings preference
-    val initialExpanded = hazards.isNotEmpty() || expandByDefault
-    var expanded by remember(hazards.size, expandByDefault) {
+    // Expand when: user always wants conditions open, or advisories present and that setting is on
+    val initialExpanded = expandByDefault || (hazards.isNotEmpty() && expandAdvisories)
+    var expanded by remember(hazards.size, expandByDefault, expandAdvisories) {
         mutableStateOf(initialExpanded)
     }
     val uriHandler = LocalUriHandler.current

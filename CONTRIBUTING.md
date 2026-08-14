@@ -22,6 +22,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 1. Branch from `main`: `git checkout -b feature/short-name`
 2. Focused commits; user-visible changes under `CHANGELOG.md` → `[Unreleased]`
 3. Open a pull request with what and why
+4. Releases: see [RELEASE.md](RELEASE.md)
 
 ## Issues
 

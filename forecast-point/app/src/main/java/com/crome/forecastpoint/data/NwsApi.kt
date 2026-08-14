@@ -632,11 +632,18 @@ class NwsApi(
         val mapClickHazards = parseMapClickHazards(data)
         val hazards = mergeHazards(apiAlerts, mapClickHazards)
         val tideInfo = tides.station?.let { st ->
+            val kind = when (st.kind) {
+                TideService.StationKind.TidePrediction -> "tide"
+                TideService.StationKind.WaterLevel -> "waterlevel"
+                TideService.StationKind.UsgsGage -> "usgs"
+            }
             TideInfo(
                 stationId = st.id,
                 stationName = st.name,
                 distanceMiles = tides.distanceMiles ?: 0.0,
                 unavailableReason = tides.unavailableReason,
+                sourceKind = kind,
+                datumLabel = tides.datumLabel,
             )
         } ?: tides.unavailableReason?.let {
             TideInfo(
