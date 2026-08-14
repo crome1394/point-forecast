@@ -1,6 +1,6 @@
-# Forecast Point
+# Point Forecast
 
-**Forecast Point** is an independent, open-source Android weather client for
+**Point Forecast** is an independent, open-source Android weather client for
 **U.S. National Weather Service** point forecasts. It focuses on clear forecasts,
 hourly tables, tides (where available), active alerts, an offline-friendly map
 picker, and a resizable home-screen widget—with **bundled NWS forecast icons**
@@ -11,7 +11,7 @@ so they display correctly on de-Googled devices such as **CalyxOS**.
 
 | | |
 |---|---|
-| **App name** | Forecast Point |
+| **App name** | Point Forecast |
 | **Application ID** | `com.crome.forecastpoint` |
 | **Min Android** | 8.0 (API 26) |
 | **License** | MIT (see [LICENSE](LICENSE)) |
@@ -26,9 +26,9 @@ so they display correctly on de-Googled devices such as **CalyxOS**.
 | | |
 |---|---|
 | **Releases page** | [github.com/crome1394/forecast-point/releases](https://github.com/crome1394/forecast-point/releases) |
-| **Direct APK (v1.0.2)** | [ForecastPoint-1.0.2.apk](https://github.com/crome1394/forecast-point/releases/download/v1.0.2/ForecastPoint-1.0.2.apk) |
+| **Direct APK (v1.0.2)** | [PointForecast-1.0.2.apk](https://github.com/crome1394/forecast-point/releases/download/v1.0.2/PointForecast-1.0.2.apk) |
 
-> The direct link works **after** you publish a release named `v1.0.2` and attach the file `ForecastPoint-1.0.2.apk` (see below).
+> The direct link works **after** you publish a release named `v1.0.2` and attach the file `PointForecast-1.0.2.apk` (see below).
 
 ### Install on Android
 
@@ -39,7 +39,7 @@ so they display correctly on de-Googled devices such as **CalyxOS**.
 Or from a computer:
 
 ```bash
-adb install -r ForecastPoint-1.0.2.apk
+adb install -r PointForecast-1.0.2.apk
 ```
 
 ### Does the file have to be named `app-debug.apk`?
@@ -53,7 +53,7 @@ forecast-point/app/build/outputs/apk/debug/app-debug.apk
 For distribution, rename it to something clear, for example:
 
 ```text
-ForecastPoint-1.0.2.apk
+PointForecast-1.0.2.apk
 ```
 
 ### Publish a release (recommended)
@@ -66,22 +66,22 @@ cd ~/src/noaa/forecast-point
 
 # Friendly name for the release asset
 mkdir -p ../dist
-cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.2.apk
+cp app/build/outputs/apk/debug/app-debug.apk ../dist/PointForecast-1.0.2.apk
 ```
 
 Then on GitHub:
 
 1. Open **https://github.com/crome1394/forecast-point/releases/new**
 2. **Choose a tag:** `v1.0.2` (create new tag on publish, target `main`)
-3. **Release title:** `Forecast Point 1.0.2`
+3. **Release title:** `Point Forecast 1.0.2`
 4. Paste notes from [CHANGELOG.md](CHANGELOG.md) (1.0.2 section)
-5. **Attach** `dist/ForecastPoint-1.0.2.apk` (drag and drop)
+5. **Attach** `dist/PointForecast-1.0.2.apk` (drag and drop)
 6. Publish release
 
 The direct download URL will be:
 
 ```text
-https://github.com/crome1394/forecast-point/releases/download/v1.0.2/ForecastPoint-1.0.2.apk
+https://github.com/crome1394/forecast-point/releases/download/v1.0.2/PointForecast-1.0.2.apk
 ```
 
 ## Features
@@ -103,7 +103,7 @@ The overall UX was **inspired by** the commercial app
 [NOAA Weather & Tides](https://play.google.com/store/apps/details?id=pandamonium.noaaweather)
 by **Pandamonium Software**.
 
-Forecast Point is a **separate reimplementation**:
+Point Forecast is a **separate reimplementation**:
 
 - New Kotlin / Jetpack Compose codebase  
 - Public NWS, NOAA CO-OPS, and OSM services  
@@ -138,8 +138,8 @@ forecast-point/app/build/outputs/apk/debug/app-debug.apk
 Rename for sharing (optional but recommended):
 
 ```bash
-cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.2.apk
-adb install -r ../dist/ForecastPoint-1.0.2.apk
+cp app/build/outputs/apk/debug/app-debug.apk ../dist/PointForecast-1.0.2.apk
+adb install -r ../dist/PointForecast-1.0.2.apk
 ```
 
 > **Note:** This build is a *debug* APK (fine for personal/sideload use). A signed *release* build is better for wider distribution; that needs a keystore you keep private.
@@ -176,9 +176,9 @@ Please use these services respectfully (identify your client, cache when possibl
 
 ## Privacy
 
-Forecast Point does not require a user account. Location is used only when you
+Point Forecast does not require a user account. Location is used only when you
 choose GPS, map pick, or search. Weather requests go to public NWS/NOAA/OSM
-endpoints; there is no separate Forecast Point analytics backend in this
+endpoints; there is no separate Point Forecast analytics backend in this
 project.
 
 ## Contributing

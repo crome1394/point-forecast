@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val screenTitle = when (screen) {
-                    AppScreen.Forecast -> "Forecast Point"
+                    AppScreen.Forecast -> "Point Forecast"
                     AppScreen.Hourly -> "Hourly Forecast"
                     AppScreen.Search -> "Add City"
                     AppScreen.Map -> "Map"
@@ -567,7 +567,7 @@ private fun AppDrawer(
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "Forecast Point",
+                    "Point Forecast",
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,

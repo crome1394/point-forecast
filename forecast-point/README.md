@@ -1,6 +1,6 @@
-# Forecast Point (Android module)
+# Point Forecast (Android module)
 
-Gradle project for the **Forecast Point** Android app.
+Gradle project for the **Point Forecast** Android app.
 
 - Application ID: `com.crome.forecastpoint`
 - Root documentation: [../README.md](../README.md)

@@ -1,7 +1,7 @@
-Forecast Point
+Point Forecast
 ==============
 
-Copyright (c) 2026 Forecast Point contributors
+Copyright (c) 2026 Point Forecast contributors
 Licensed under the MIT License (see LICENSE).
 
 Third-party data and libraries
@@ -48,5 +48,5 @@ User experience was inspired by the commercial Android application
 “NOAA Weather & Tides” by Pandamonium Software
 (https://play.google.com/store/apps/details?id=pandamonium.noaaweather).
 
-Forecast Point is an independent clean-room implementation. It does not
+Point Forecast is an independent clean-room implementation. It does not
 include that product’s source code, proprietary assets, or branding.

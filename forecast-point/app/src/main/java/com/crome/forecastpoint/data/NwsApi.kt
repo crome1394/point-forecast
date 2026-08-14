@@ -1027,7 +1027,7 @@ class NwsApi(
 
     companion object {
         const val USER_AGENT =
-            "ForecastPoint/1.0 (Android; open-source NWS client; https://github.com/)"
+            "PointForecast/1.0 (Android; open-source NWS client; https://github.com/)"
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

@@ -1,1 +1,1 @@
-# Forecast Point
+# Point Forecast

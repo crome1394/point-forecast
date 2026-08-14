@@ -124,7 +124,7 @@ object WeatherWidgetUpdater {
         val currentIconPx = (dayIconPx * 1.15f).toInt().coerceIn(96, 200)
 
         if (snap == null) {
-            views.setTextViewText(R.id.widget_location, "Forecast Point")
+            views.setTextViewText(R.id.widget_location, "Point Forecast")
             views.setTextViewText(R.id.widget_datetime, "Open app to load weather")
             views.setTextViewText(R.id.widget_temp, "—")
             return views

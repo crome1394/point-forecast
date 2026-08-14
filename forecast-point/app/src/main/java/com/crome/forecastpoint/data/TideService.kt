@@ -81,7 +81,7 @@ class TideService(
             "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter" +
                 "?begin_date=$begin&range=168&station=$stationId" +
                 "&product=predictions&datum=MLLW&time_zone=gmt&interval=h" +
-                "&units=english&format=json&application=ForecastPoint"
+                "&units=english&format=json&application=PointForecast"
 
         val body = httpGet(url) ?: return emptyMap()
         val root = JSONObject(body)
@@ -192,7 +192,7 @@ class TideService(
     private fun httpGet(url: String): String? {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", "ForecastPoint/1.0 (Android; personal)")
+            .header("User-Agent", "PointForecast/1.0 (Android; personal)")
             .header("Accept", "application/json")
             .get()
             .build()

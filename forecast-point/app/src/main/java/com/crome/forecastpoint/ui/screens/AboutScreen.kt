@@ -25,7 +25,7 @@ fun AboutScreen() {
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
     ) {
-        Text("Forecast Point", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Point Forecast", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("Version 1.0.0", color = OnSurfaceMuted, modifier = Modifier.padding(top = 4.dp))
         Text(
             "Independent open-source weather client for U.S. National Weather Service " +
@@ -57,7 +57,7 @@ fun AboutScreen() {
         Text(
             "Inspiration\n" +
                 "UX inspired by the commercial “NOAA Weather & Tides” Android app " +
-                "(Pandamonium Software). Forecast Point is a clean-room reimplementation " +
+                "(Pandamonium Software). Point Forecast is a clean-room reimplementation " +
                 "using public data APIs—not their source code or proprietary assets.",
             color = OnSurfaceMuted,
             modifier = Modifier.padding(top = 16.dp),

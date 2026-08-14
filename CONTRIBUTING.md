@@ -1,6 +1,6 @@
-# Contributing to Forecast Point
+# Contributing to Point Forecast
 
-Thanks for your interest in improving Forecast Point.
+Thanks for your interest in improving Point Forecast.
 
 ## Ground rules
 

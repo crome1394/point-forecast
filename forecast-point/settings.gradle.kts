@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ForecastPoint"
+rootProject.name = "PointForecast"
 include(":app")

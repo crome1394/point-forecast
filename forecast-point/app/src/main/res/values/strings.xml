@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Forecast Point</string>
-    <string name="widget_name">Forecast Point</string>
+    <string name="app_name">Point Forecast</string>
+    <string name="widget_name">Point Forecast</string>
     <string name="widget_description">NWS point forecast, hourly data, and multi-day outlook</string>
     <string name="widget_refresh">Refresh weather</string>
 </resources>

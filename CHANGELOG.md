@@ -1,11 +1,15 @@
 # Changelog
 
-All notable changes to **Forecast Point** are documented in this file.
+All notable changes to **Point Forecast** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+### Changed
+
+- App display name renamed from **Forecast Point** to **Point Forecast** (launcher, widget, About, docs). Package ID `com.crome.forecastpoint` is unchanged so installs upgrade in place.
 
 ### Added
 
@@ -48,7 +52,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] — 2026-08-06
 
-Initial public release under the name **Forecast Point**
+Initial public release under the name **Point Forecast**
 (`com.crome.forecastpoint`).
 
 ### Added
@@ -75,6 +79,6 @@ Initial public release under the name **Forecast Point**
 
 ### Notes
 
-- Renamed from internal working title “NOAA Forecast” to **Forecast Point** to
-  distinguish this community project from official NOAA products and the
-  commercial Play Store app.
+- Renamed from internal working title “NOAA Forecast” to **Forecast Point**,
+  later **Point Forecast**, to distinguish this community project from official
+  NOAA products and the commercial Play Store app.
