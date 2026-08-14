@@ -75,37 +75,75 @@ class NwsApi(
         }
     }
 
+    /**
+     * City / town search only — filters out streets, businesses, and other non-settlements.
+     * Handles "City, ST" queries (e.g. "de kalb, IL" → DeKalb IL).
+     */
     suspend fun geocode(query: String): List<GeocodeResult> = withContext(Dispatchers.IO) {
-        val q = java.net.URLEncoder.encode(query, Charsets.UTF_8.name())
-        val url =
-            "https://nominatim.openstreetmap.org/search?q=$q&format=json&limit=8&addressdetails=1&countrycodes=us"
-        val body = getString(url)
-        val arr = JSONArray(body)
-        buildList {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return@withContext emptyList()
+
+        val seen = linkedSetOf<String>()
+        val out = mutableListOf<GeocodeResult>()
+
+        fun addFrom(arr: JSONArray) {
             for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val lat = o.getDouble("lat")
-                val lon = o.getDouble("lon")
+                val o = arr.optJSONObject(i) ?: continue
+                if (!isSettlementHit(o)) continue
+                val lat = o.optDouble("lat", Double.NaN)
+                val lon = o.optDouble("lon", Double.NaN)
+                if (lat.isNaN() || lon.isNaN()) continue
                 val display = o.optString("display_name")
                 val addr = o.optJSONObject("address")
-                // Nominatim optString returns "" (not null) for missing keys — never use ?: on raw optString
                 val name = formatPlaceName(
                     placeName = o.optString("name").takeIf { it.isNotBlank() },
                     address = addr,
                     displayName = display,
+                    osmClass = o.optString("class"),
+                    osmType = o.optString("type"),
                 )
-                add(GeocodeResult(name = name, displayName = display, latitude = lat, longitude = lon))
+                if (name.isBlank() || isStreetLikeName(name)) continue
+                val key = "${name.lowercase(Locale.US)}|${"%.3f".format(Locale.US, lat)}|${"%.3f".format(Locale.US, lon)}"
+                if (!seen.add(key)) continue
+                out += GeocodeResult(
+                    name = name,
+                    displayName = display.ifBlank { name },
+                    latitude = lat,
+                    longitude = lon,
+                )
             }
         }
+
+        // 1) Free-form search
+        addFrom(nominatimSearchFreeform(trimmed))
+
+        // 2) Structured "City, ST" — better for multi-word cities (De Kalb → DeKalb)
+        val cityState = parseCityStateQuery(trimmed)
+        if (cityState != null) {
+            val (city, state) = cityState
+            addFrom(nominatimSearchStructured(city, state))
+            // Nominatim is picky about spaces: "de kalb" often fails, "dekalb" works
+            val collapsed = city.replace(" ", "")
+            if (collapsed.length >= 3 && !collapsed.equals(city, ignoreCase = true)) {
+                addFrom(nominatimSearchStructured(collapsed, state))
+            }
+        }
+
+        out.take(8)
     }
 
-    /** Reverse-geocode a map tap into a short "City ST" label. */
+    /**
+     * Reverse-geocode a map tap into nearest city/town + state (never a street name).
+     * Uses zoom≈12 so Nominatim returns a settlement, not a house/road.
+     */
     suspend fun reverseGeocode(latitude: Double, longitude: Double): GeocodeResult =
         withContext(Dispatchers.IO) {
             val lat = String.format(Locale.US, "%.5f", latitude)
             val lon = String.format(Locale.US, "%.5f", longitude)
+            // zoom 10–14 ≈ city/town; default 18 returns house/road names
             val url =
-                "https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&addressdetails=1"
+                "https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon" +
+                    "&format=json&addressdetails=1&zoom=12"
             val body = getString(url)
             val o = JSONObject(body)
             val display = o.optString("display_name")
@@ -114,6 +152,8 @@ class NwsApi(
                 placeName = o.optString("name").takeIf { it.isNotBlank() },
                 address = addr,
                 displayName = display.ifBlank { "$lat, $lon" },
+                osmClass = o.optString("class"),
+                osmType = o.optString("type"),
             )
             GeocodeResult(
                 name = name.ifBlank { String.format(Locale.US, "%.3f, %.3f", latitude, longitude) },
@@ -123,14 +163,109 @@ class NwsApi(
             )
         }
 
+    private fun nominatimSearchFreeform(query: String): JSONArray {
+        val q = java.net.URLEncoder.encode(query, Charsets.UTF_8.name())
+        val url =
+            "https://nominatim.openstreetmap.org/search?q=$q&format=json&limit=12" +
+                "&addressdetails=1&countrycodes=us"
+        return runCatching { JSONArray(getString(url)) }.getOrDefault(JSONArray())
+    }
+
+    private fun nominatimSearchStructured(city: String, state: String): JSONArray {
+        val c = java.net.URLEncoder.encode(city, Charsets.UTF_8.name())
+        val s = java.net.URLEncoder.encode(state, Charsets.UTF_8.name())
+        val url =
+            "https://nominatim.openstreetmap.org/search?city=$c&state=$s&country=USA" +
+                "&format=json&limit=8&addressdetails=1&countrycodes=us"
+        return runCatching { JSONArray(getString(url)) }.getOrDefault(JSONArray())
+    }
+
+    /** "de kalb, IL" / "Columbus Ohio" → city + state token. */
+    private fun parseCityStateQuery(query: String): Pair<String, String>? {
+        val comma = query.split(",", limit = 2).map { it.trim() }.filter { it.isNotEmpty() }
+        if (comma.size == 2) {
+            return comma[0] to comma[1]
+        }
+        // "City ST" trailing 2-letter state
+        val m = Regex("""^(.+?)\s+([A-Za-z]{2})$""").matchEntire(query.trim())
+        if (m != null) {
+            return m.groupValues[1].trim() to m.groupValues[2]
+        }
+        return null
+    }
+
     /**
-     * Build "Kidron OH" style labels. Prefer OSM place name / village / town / city,
-     * never let empty optString short-circuit to state-only names.
+     * Keep cities/towns/villages/admin places; drop roads, POIs, counties when possible.
+     */
+    private fun isSettlementHit(o: JSONObject): Boolean {
+        val clazz = o.optString("class")
+        val type = o.optString("type")
+        val name = o.optString("name")
+        if (clazz in setOf("highway", "railway", "waterway", "aeroway", "aerialway")) return false
+        if (clazz == "landuse" || clazz == "natural" || clazz == "building") return false
+        if (type in setOf(
+                "residential", "commercial", "industrial", "retail", "farm",
+                "house", "yes", "apartments",
+            )
+        ) {
+            return false
+        }
+        if (isStreetLikeName(name)) return false
+        // Counties are not useful as "city" results
+        if (name.contains(" County", ignoreCase = true)) return false
+        if (clazz == "place") return true
+        if (clazz == "boundary" && type == "administrative") return true
+        if (type in setOf(
+                "city", "town", "village", "hamlet", "municipality",
+                "suburb", "borough", "city_district", "administrative",
+            )
+        ) {
+            return true
+        }
+        // Address payload may still describe a city even when class is odd
+        val addr = o.optJSONObject("address") ?: return false
+        return addrHasLocality(addr) && !isStreetLikeName(name)
+    }
+
+    private fun addrHasLocality(address: JSONObject): Boolean {
+        for (k in listOf("city", "town", "village", "hamlet", "municipality")) {
+            if (address.optString(k).isNotBlank()) return true
+        }
+        return false
+    }
+
+    private fun isStreetLikeName(name: String): Boolean {
+        val n = name.trim()
+        if (n.isEmpty()) return false
+        // "123 Main Street" or pure road labels
+        if (n.first().isDigit()) return true
+        val lower = " ${n.lowercase(Locale.US)} "
+        val tokens = listOf(
+            " road", " rd", " rd.", " street", " st.", " avenue", " ave", " ave.",
+            " boulevard", " blvd", " blvd.", " lane", " ln", " ln.", " drive", " dr", " dr.",
+            " court", " ct", " ct.", " circle", " cir", " way", " highway", " hwy", " hwy.",
+            " parkway", " pkwy", " trail", " terrace", " ter", " pike", " route", " rte",
+            " freeway", " expressway", " alley", " path", " walk",
+        )
+        // Require suffix-style match (end of name) so "St Louis" is not treated as a street
+        val end = n.lowercase(Locale.US)
+        return tokens.any { t ->
+            val bare = t.trim().removeSuffix(".")
+            end.endsWith(" $bare") || end.endsWith(" $bare.") ||
+                end.endsWith(" ${bare.replace(".", "")}")
+        } || lower.contains(" road ") || lower.contains(" street ") || lower.contains(" avenue ")
+    }
+
+    /**
+     * Build "Columbus OH" / "DeKalb IL" labels.
+     * Prefer city/town/village from the address block — never road/house names.
      */
     private fun formatPlaceName(
         placeName: String?,
         address: JSONObject?,
         displayName: String,
+        osmClass: String? = null,
+        osmType: String? = null,
     ): String {
         fun addr(vararg keys: String): String? {
             if (address == null) return null
@@ -141,17 +276,34 @@ class NwsApi(
             return null
         }
 
-        val locality = placeName
-            ?: addr("village", "hamlet", "town", "city", "municipality", "suburb", "neighbourhood")
-            ?: addr("county")?.removeSuffix(" County")
-            ?: displayName.substringBefore(',').trim().takeIf { it.isNotBlank() }
+        // Settlement fields only (skip road, house_number, suburb-as-street, etc.)
+        val localityFromAddr = addr(
+            "city", "town", "village", "hamlet", "municipality",
+            "city_district", "borough",
+        )
+            // suburb only if we have nothing better (still a place, not a street)
+            ?: addr("suburb")
+
+        val usablePlaceName = placeName
+            ?.takeIf { it.isNotBlank() }
+            ?.takeIf { !isStreetLikeName(it) }
+            ?.takeIf {
+                // Don't use highway/POI feature names as the city label
+                osmClass !in setOf("highway", "railway", "landuse", "building", "amenity", "shop")
+            }
+
+        val locality = localityFromAddr
+            ?: usablePlaceName
+            ?: addr("county")?.removeSuffix(" County")?.takeIf { !it.equals("County", true) }
+            ?: displayName.substringBefore(',').trim()
+                .takeIf { it.isNotBlank() && !isStreetLikeName(it) && !it.first().isDigit() }
 
         val stateRaw = addr("state", "state_code")
+            ?: Regex("""\b([A-Z]{2})\b""").find(displayName)?.groupValues?.getOrNull(1)
         val state = stateRaw?.let { shortState(it) }
 
         return when {
             !locality.isNullOrBlank() && !state.isNullOrBlank() -> {
-                // Avoid "Ohio OH"
                 if (locality.equals(stateRaw, ignoreCase = true) ||
                     locality.equals(state, ignoreCase = true)
                 ) {
@@ -162,7 +314,7 @@ class NwsApi(
             }
             !locality.isNullOrBlank() -> locality
             !state.isNullOrBlank() -> state
-            else -> displayName.substringBefore(',').trim().ifBlank { "Selected location" }
+            else -> "Selected location"
         }
     }
 
@@ -772,13 +924,26 @@ class NwsApi(
     }
 
     private fun shortState(state: String): String {
+        val trimmed = state.trim()
+        if (trimmed.length == 2 && trimmed.all { it.isLetter() }) {
+            return trimmed.uppercase(Locale.US)
+        }
         val map = mapOf(
-            "ohio" to "OH", "oklahoma" to "OK", "california" to "CA",
-            "arizona" to "AZ", "idaho" to "ID", "illinois" to "IL",
-            "pennsylvania" to "PA", "colorado" to "CO", "texas" to "TX",
-            "new york" to "NY", "florida" to "FL", "washington" to "WA",
+            "alabama" to "AL", "alaska" to "AK", "arizona" to "AZ", "arkansas" to "AR",
+            "california" to "CA", "colorado" to "CO", "connecticut" to "CT", "delaware" to "DE",
+            "florida" to "FL", "georgia" to "GA", "hawaii" to "HI", "idaho" to "ID",
+            "illinois" to "IL", "indiana" to "IN", "iowa" to "IA", "kansas" to "KS",
+            "kentucky" to "KY", "louisiana" to "LA", "maine" to "ME", "maryland" to "MD",
+            "massachusetts" to "MA", "michigan" to "MI", "minnesota" to "MN", "mississippi" to "MS",
+            "missouri" to "MO", "montana" to "MT", "nebraska" to "NE", "nevada" to "NV",
+            "new hampshire" to "NH", "new jersey" to "NJ", "new mexico" to "NM", "new york" to "NY",
+            "north carolina" to "NC", "north dakota" to "ND", "ohio" to "OH", "oklahoma" to "OK",
+            "oregon" to "OR", "pennsylvania" to "PA", "rhode island" to "RI", "south carolina" to "SC",
+            "south dakota" to "SD", "tennessee" to "TN", "texas" to "TX", "utah" to "UT",
+            "vermont" to "VT", "virginia" to "VA", "washington" to "WA", "west virginia" to "WV",
+            "wisconsin" to "WI", "wyoming" to "WY", "district of columbia" to "DC",
         )
-        return map[state.lowercase(Locale.US)] ?: state
+        return map[trimmed.lowercase(Locale.US)] ?: trimmed
     }
 
     private fun getJson(url: String): JSONObject = JSONObject(getString(url))

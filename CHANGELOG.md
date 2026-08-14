@@ -13,6 +13,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Settings → **Show tides in hourly** (default on) to hide the Tides tab when not needed
 - Map **blue GPS pin** for your live position (stays while choosing a location; red pin is the weather pick)
 
+### Changed
+
+- Map pin labels and city search prefer **city + state** (e.g. Columbus OH, DeKalb IL) instead of street names or business results
+
 ### Fixed
 
 - Hourly times misaligned vs weather.gov: MapClick `digitalJSON` ships incorrect `time` / `unixtime` labels (e.g. peak PoP shown at 7–9 pm that weather.gov has at 10 pm–midnight). Hourly rows are now anchored to MapClick `startValidTime` and stepped hourly so **Precipitation chance** matches the NWS digital table.
