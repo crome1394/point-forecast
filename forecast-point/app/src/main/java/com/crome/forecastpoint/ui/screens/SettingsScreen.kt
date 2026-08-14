@@ -45,6 +45,7 @@ fun SettingsScreen(
     mapSearchAtBottom: Boolean,
     expandCurrentConditions: Boolean,
     showTidesTab: Boolean,
+    showSpaceWeather: Boolean,
     onAutoUpdateChange: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
     onTitleBarAtBottomChange: (Boolean) -> Unit,
@@ -52,6 +53,7 @@ fun SettingsScreen(
     onMapSearchAtBottomChange: (Boolean) -> Unit,
     onExpandCurrentConditionsChange: (Boolean) -> Unit,
     onShowTidesTabChange: (Boolean) -> Unit,
+    onShowSpaceWeatherChange: (Boolean) -> Unit,
     onManualRefresh: () -> Unit,
 ) {
     Column(
@@ -72,12 +74,12 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Title bar at bottom", color = Color.White, fontSize = 16.sp)
+                Text("Title bar & buttons position", color = Color.White, fontSize = 16.sp)
                 Text(
                     if (titleBarAtBottom) {
-                        "Title and actions are at the bottom of the screen"
+                        "Menu, search, radar, and refresh are at the bottom of the screen"
                     } else {
-                        "Title and actions are at the top of the screen"
+                        "Menu, search, radar, and refresh are at the top of the screen (default)"
                     },
                     color = OnSurfaceMuted,
                     fontSize = 13.sp,
@@ -140,6 +142,33 @@ fun SettingsScreen(
             Switch(
                 checked = showTidesTab,
                 onCheckedChange = onShowTidesTabChange,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(SurfaceDark)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Show space weather", color = Color.White, fontSize = 16.sp)
+                Text(
+                    if (showSpaceWeather) {
+                        "Hourly tab with NOAA SWPC planetary Kp index and G-scale (global, not city-specific)"
+                    } else {
+                        "Space weather tab is hidden"
+                    },
+                    color = OnSurfaceMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            Switch(
+                checked = showSpaceWeather,
+                onCheckedChange = onShowSpaceWeatherChange,
             )
         }
 

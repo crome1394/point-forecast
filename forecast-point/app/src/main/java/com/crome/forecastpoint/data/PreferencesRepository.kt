@@ -29,6 +29,7 @@ class PreferencesRepository(private val context: Context) {
     private val keyMapSearchBottom = booleanPreferencesKey("map_search_at_bottom")
     private val keyExpandCurrentConditions = booleanPreferencesKey("expand_current_conditions")
     private val keyShowTidesTab = booleanPreferencesKey("show_tides_tab")
+    private val keyShowSpaceWeather = booleanPreferencesKey("show_space_weather")
 
     val autoUpdateEnabled: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoUpdate] ?: true }
@@ -67,6 +68,13 @@ class PreferencesRepository(private val context: Context) {
      */
     val showTidesTab: Flow<Boolean> =
         context.dataStore.data.map { it[keyShowTidesTab] ?: true }
+
+    /**
+     * When true (default), Hourly includes a Space Weather tab (NOAA SWPC Kp / G-scale).
+     * Planetary data — not tied to the selected city.
+     */
+    val showSpaceWeather: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowSpaceWeather] ?: true }
 
     val favorites: Flow<List<SavedLocation>> =
         context.dataStore.data.map { prefs ->
@@ -116,6 +124,10 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setShowTidesTab(show: Boolean) {
         context.dataStore.edit { it[keyShowTidesTab] = show }
+    }
+
+    suspend fun setShowSpaceWeather(show: Boolean) {
+        context.dataStore.edit { it[keyShowSpaceWeather] = show }
     }
 
     suspend fun setActiveLocationId(id: String?) {

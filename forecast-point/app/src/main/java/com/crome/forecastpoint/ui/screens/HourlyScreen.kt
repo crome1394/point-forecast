@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.data.HourlyRow
+import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.data.TideInfo
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import kotlinx.coroutines.launch
@@ -52,6 +53,7 @@ private enum class HourlyTab(val title: String) {
     Wind("WIND"),
     Tides("TIDES"),
     Conditions("CONDITIONS"),
+    SpaceWeather("SPACE WX"),
 }
 
 private val TableFont = FontFamily.SansSerif
@@ -91,18 +93,28 @@ fun HourlyScreen(
     hourly: List<HourlyRow>,
     tideInfo: TideInfo? = null,
     showTidesTab: Boolean = true,
+    showSpaceWeather: Boolean = true,
+    spaceWeather: SpaceWeatherService.Snapshot? = null,
 ) {
-    val tabs = remember(showTidesTab) {
-        if (showTidesTab) {
-            HourlyTab.entries
-        } else {
-            HourlyTab.entries.filter { it != HourlyTab.Tides }
+    val hasLocalHourly = hourly.isNotEmpty()
+    val tabs = remember(showTidesTab, showSpaceWeather, hasLocalHourly) {
+        HourlyTab.entries.filter { tab ->
+            when (tab) {
+                HourlyTab.Tides -> showTidesTab && hasLocalHourly
+                HourlyTab.SpaceWeather -> showSpaceWeather
+                else -> hasLocalHourly
+            }
         }
     }
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
-    val tabModels = remember(hourly, showTidesTab) {
-        buildTabModels(hourly, includeTides = showTidesTab)
+    val tabModels = remember(hourly, showTidesTab, showSpaceWeather, spaceWeather) {
+        buildTabModels(
+            hourly = hourly,
+            includeTides = showTidesTab,
+            includeSpaceWeather = showSpaceWeather,
+            spaceWeather = spaceWeather,
+        )
     }
     Column(
         Modifier
@@ -110,7 +122,7 @@ fun HourlyScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         ScrollableTabRow(
-            selectedTabIndex = pagerState.currentPage,
+            selectedTabIndex = pagerState.currentPage.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)),
             containerColor = PrimaryBlue,
             contentColor = Color.White,
             edgePadding = 0.dp,
@@ -144,7 +156,7 @@ fun HourlyScreen(
             }
         }
 
-        if (hourly.isEmpty() || tabModels.isEmpty()) {
+        if (tabModels.isEmpty()) {
             Text(
                 "Hourly data unavailable for this location.",
                 color = Color(0xFFB0BEC5),
@@ -154,8 +166,10 @@ fun HourlyScreen(
             return
         }
 
-        if (showTidesTab && tabs.getOrNull(pagerState.currentPage) == HourlyTab.Tides) {
-            TideStationBar(tideInfo)
+        when (tabs.getOrNull(pagerState.currentPage)) {
+            HourlyTab.Tides -> TideStationBar(tideInfo)
+            HourlyTab.SpaceWeather -> SpaceWeatherBar(spaceWeather)
+            else -> Unit
         }
 
         HorizontalPager(
@@ -186,6 +200,28 @@ private fun TideStationBar(tideInfo: TideInfo?) {
         !tideInfo.unavailableReason.isNullOrBlank() ->
             "Tide: ${tideInfo.unavailableReason}"
         else -> "Station: ${tideInfo.stationName} · ${"%.0f".format(tideInfo.distanceMiles)} mi · MLLW ft"
+    }
+    Text(
+        text = text,
+        color = Color(0xFFB0BEC5),
+        fontSize = 11.sp,
+        fontFamily = TableFont,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1E2A30))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun SpaceWeatherBar(snap: SpaceWeatherService.Snapshot?) {
+    val text = when {
+        snap == null -> "Space weather: loading NOAA SWPC… (planetary Kp, UTC)"
+        snap.currentGScale != null ->
+            "NOAA SWPC · Now ${snap.currentGScale}" +
+                (snap.currentGText?.let { " ($it)" } ?: "") +
+                " · 3-hour Kp (UTC) · not location-specific"
+        else -> "NOAA SWPC · planetary Kp (UTC) · not location-specific"
     }
     Text(
         text = text,
@@ -270,10 +306,17 @@ private fun popColor(pop: Int?): Color {
 private fun buildTabModels(
     hourly: List<HourlyRow>,
     includeTides: Boolean = true,
+    includeSpaceWeather: Boolean = true,
+    spaceWeather: SpaceWeatherService.Snapshot? = null,
 ): List<TabModel> {
-    if (hourly.isEmpty()) return emptyList()
+    // Space weather can still show when local hourly is empty (e.g. no city yet)
+    if (hourly.isEmpty() && !(includeSpaceWeather && spaceWeather != null && spaceWeather.periods.isNotEmpty())) {
+        return emptyList()
+    }
     val times = hourly.map { formatTimeLabel(it) }
-    val models = mutableListOf(
+    val models = mutableListOf<TabModel>()
+    if (hourly.isNotEmpty()) {
+        models +=
         TabModel(
             headers = listOf("Temperature", "Feels Like", "Dew Point"),
             rows = hourly.mapIndexed { i, row ->
@@ -295,8 +338,8 @@ private fun buildTabModels(
                     ),
                 )
             },
-        ),
-        TabModel(
+        )
+        models += TabModel(
             headers = listOf("Chance", "Amount", "Cloud Cover", "Humidity"),
             rows = hourly.mapIndexed { i, row ->
                 HourlyTableRow(
@@ -315,8 +358,8 @@ private fun buildTabModels(
                     ),
                 )
             },
-        ),
-        TabModel(
+        )
+        models += TabModel(
             headers = listOf("Speed", "Gust", "Direction"),
             rows = hourly.mapIndexed { i, row ->
                 HourlyTableRow(
@@ -328,41 +371,94 @@ private fun buildTabModels(
                     ),
                 )
             },
-        ),
-    )
-    if (includeTides) {
+        )
+        if (includeTides) {
+            models += TabModel(
+                headers = listOf("Height", "Trend"),
+                rows = hourly.mapIndexed { i, row ->
+                    val trendColor = when (row.tideTrend) {
+                        "Rising" -> Color(0xFF81C784)
+                        "Falling" -> Color(0xFFE57373)
+                        else -> TideTeal
+                    }
+                    HourlyTableRow(
+                        time = times[i],
+                        cells = listOf(
+                            ColoredCell(
+                                row.tideFt?.let { String.format(Locale.US, "%.2f ft", it) }.orEmpty(),
+                                TideTeal,
+                            ),
+                            ColoredCell(row.tideTrend.orEmpty(), trendColor),
+                        ),
+                    )
+                },
+            )
+        }
         models += TabModel(
-            headers = listOf("Height", "Trend"),
+            headers = listOf("Conditions"),
             rows = hourly.mapIndexed { i, row ->
-                val trendColor = when (row.tideTrend) {
-                    "Rising" -> Color(0xFF81C784)
-                    "Falling" -> Color(0xFFE57373)
-                    else -> TideTeal
-                }
                 HourlyTableRow(
                     time = times[i],
-                    cells = listOf(
-                        ColoredCell(
-                            row.tideFt?.let { String.format(Locale.US, "%.2f ft", it) }.orEmpty(),
-                            TideTeal,
-                        ),
-                        ColoredCell(row.tideTrend.orEmpty(), trendColor),
-                    ),
+                    cells = listOf(ColoredCell(row.weather, ConditionsWhite)),
                 )
             },
         )
     }
-    models += TabModel(
-        headers = listOf("Conditions"),
-        rows = hourly.mapIndexed { i, row ->
-            HourlyTableRow(
-                time = times[i],
-                cells = listOf(ColoredCell(row.weather, ConditionsWhite)),
-            )
-        },
-    )
+    if (includeSpaceWeather) {
+        val periods = spaceWeather?.periods.orEmpty()
+        models += TabModel(
+            headers = listOf("Kp", "G-Scale", "Status"),
+            rows = if (periods.isEmpty()) {
+                listOf(
+                    HourlyTableRow(
+                        time = "—",
+                        cells = listOf(
+                            ColoredCell("…", Color.White),
+                            ColoredCell("…", Color.White),
+                            ColoredCell("Loading or unavailable", Color(0xFFB0BEC5)),
+                        ),
+                    ),
+                )
+            } else {
+                periods.map { p ->
+                    HourlyTableRow(
+                        time = p.timeLabelUtc,
+                        cells = listOf(
+                            ColoredCell(
+                                p.kp?.let { String.format(Locale.US, "%.2f", it) }.orEmpty(),
+                                kpColor(p.kp),
+                            ),
+                            ColoredCell(p.gScale, gScaleColor(p.gScale)),
+                            ColoredCell(p.status, Color(0xFFB0BEC5)),
+                        ),
+                    )
+                }
+            },
+        )
+    }
     return models
 }
+
+private fun kpColor(kp: Double?): Color {
+    if (kp == null) return Color.White
+    return when {
+        kp < 4.0 -> Color(0xFF81C784)
+        kp < 5.0 -> Color(0xFFFFF176)
+        kp < 6.0 -> Color(0xFFFFB74D)
+        kp < 7.0 -> Color(0xFFFF8A65)
+        else -> Color(0xFFEF5350)
+    }
+}
+
+private fun gScaleColor(scale: String): Color = when (scale.uppercase(Locale.US)) {
+    "G0", "—" -> Color(0xFF81C784)
+    "G1" -> Color(0xFFFFF176)
+    "G2" -> Color(0xFFFFB74D)
+    "G3" -> Color(0xFFFF8A65)
+    "G4", "G5" -> Color(0xFFEF5350)
+    else -> Color.White
+}
+
 
 @Composable
 private fun HourlyTable(

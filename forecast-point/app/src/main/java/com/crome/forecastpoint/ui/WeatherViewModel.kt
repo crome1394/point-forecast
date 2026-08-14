@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.crome.forecastpoint.data.GeocodeResult
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.SavedLocation
+import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.worker.WeatherUpdateScheduler
@@ -16,12 +17,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = WeatherRepository(app.applicationContext)
     private val prefs = repo.preferences
+    private val spaceWeatherService = SpaceWeatherService()
 
     val snapshot: StateFlow<WeatherSnapshot?> = repo.snapshot
     val loading: StateFlow<Boolean> = repo.loading
@@ -44,6 +47,10 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     val expandCurrentConditions =
         prefs.expandCurrentConditions.stateIn(viewModelScope, share, false)
     val showTidesTab = prefs.showTidesTab.stateIn(viewModelScope, share, true)
+    val showSpaceWeather = prefs.showSpaceWeather.stateIn(viewModelScope, share, true)
+
+    private val _spaceWeather = MutableStateFlow<SpaceWeatherService.Snapshot?>(null)
+    val spaceWeather: StateFlow<SpaceWeatherService.Snapshot?> = _spaceWeather.asStateFlow()
 
     private val _searchResults = MutableStateFlow<List<GeocodeResult>>(emptyList())
     val searchResults: StateFlow<List<GeocodeResult>> = _searchResults.asStateFlow()
@@ -63,11 +70,30 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                 WeatherUpdateScheduler.applyFromPrefs(getApplication())
             }
         }
+        // Load SWPC data when the user wants the Space Weather tab
+        viewModelScope.launch {
+            prefs.showSpaceWeather.collectLatest { enabled ->
+                if (enabled) {
+                    refreshSpaceWeather()
+                } else {
+                    _spaceWeather.value = null
+                }
+            }
+        }
     }
 
     fun manualRefresh() {
         viewModelScope.launch {
             runCatching { repo.refreshActive(manual = true) }
+            if (showSpaceWeather.value) {
+                refreshSpaceWeather()
+            }
+        }
+    }
+
+    private suspend fun refreshSpaceWeather() {
+        runCatching {
+            _spaceWeather.value = spaceWeatherService.fetch()
         }
     }
 
@@ -197,6 +223,12 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     fun setShowTidesTab(show: Boolean) {
         viewModelScope.launch {
             prefs.setShowTidesTab(show)
+        }
+    }
+
+    fun setShowSpaceWeather(show: Boolean) {
+        viewModelScope.launch {
+            prefs.setShowSpaceWeather(show)
         }
     }
 

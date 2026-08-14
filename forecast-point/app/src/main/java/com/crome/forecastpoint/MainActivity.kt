@@ -115,6 +115,8 @@ class MainActivity : ComponentActivity() {
                 val mapSearchAtBottom by viewModel.mapSearchAtBottom.collectAsState()
                 val expandCurrentConditions by viewModel.expandCurrentConditions.collectAsState()
                 val showTidesTab by viewModel.showTidesTab.collectAsState()
+                val showSpaceWeather by viewModel.showSpaceWeather.collectAsState()
+                val spaceWeather by viewModel.spaceWeather.collectAsState()
 
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -425,6 +427,8 @@ class MainActivity : ComponentActivity() {
                                     hourly = snapshot?.hourly.orEmpty(),
                                     tideInfo = snapshot?.tideInfo,
                                     showTidesTab = showTidesTab,
+                                    showSpaceWeather = showSpaceWeather,
+                                    spaceWeather = spaceWeather,
                                 )
                                 AppScreen.Search -> SearchScreen(
                                     results = searchResults,
@@ -457,6 +461,7 @@ class MainActivity : ComponentActivity() {
                                     mapSearchAtBottom = mapSearchAtBottom,
                                     expandCurrentConditions = expandCurrentConditions,
                                     showTidesTab = showTidesTab,
+                                    showSpaceWeather = showSpaceWeather,
                                     onAutoUpdateChange = { viewModel.setAutoUpdate(it) },
                                     onIntervalChange = { viewModel.setIntervalMinutes(it) },
                                     onTitleBarAtBottomChange = { viewModel.setTitleBarAtBottom(it) },
@@ -466,6 +471,7 @@ class MainActivity : ComponentActivity() {
                                         viewModel.setExpandCurrentConditions(it)
                                     },
                                     onShowTidesTabChange = { viewModel.setShowTidesTab(it) },
+                                    onShowSpaceWeatherChange = { viewModel.setShowSpaceWeather(it) },
                                     onManualRefresh = {
                                         viewModel.manualRefresh()
                                         screen = AppScreen.Forecast

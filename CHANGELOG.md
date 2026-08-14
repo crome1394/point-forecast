@@ -11,10 +11,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 - App bar **radar** control (colorful icon next to Refresh) opens National Weather Radar for the active location; large in-feed radar button removed
 - Settings → **Show tides in hourly** (default on) to hide the Tides tab when not needed
+- Settings → **Show space weather** (default on): Hourly **SPACE WX** tab with NOAA SWPC planetary Kp (3-hour) and G-scale; not location-specific
 - Map **blue GPS pin** for your live position (stays while choosing a location; red pin is the weather pick)
 
 ### Changed
 
+- Settings label for title bar clarifies that **menu, search, radar, and refresh** move top ↔ bottom together
 - Map pin labels and city search prefer **city + state** (e.g. Columbus OH, DeKalb IL) instead of street names or business results
 
 ### Fixed
