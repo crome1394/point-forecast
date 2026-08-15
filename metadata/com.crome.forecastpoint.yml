@@ -1,0 +1,53 @@
+# F-Droid metadata template (for submission to fdroiddata)
+# https://f-droid.org/docs/Build_Metadata_Reference/
+
+Categories:
+  - Internet
+  - Science & Education
+
+License: MIT
+
+AuthorName: Point Forecast contributors
+AuthorWebSite: https://github.com/crome1394/point-forecast
+WebSite: https://github.com/crome1394/point-forecast
+SourceCode: https://github.com/crome1394/point-forecast
+IssueTracker: https://github.com/crome1394/point-forecast/issues
+Changelog: https://github.com/crome1394/point-forecast/blob/main/CHANGELOG.md
+
+AutoName: Point Forecast
+
+RepoType: git
+Repo: https://github.com/crome1394/point-forecast.git
+
+Builds:
+  - versionName: '1.1.3'
+    versionCode: 6
+    commit: v1.1.3
+    subdir: forecast-point
+    gradle:
+      - yes
+
+# No non-free dependencies, no proprietary SDKs, no tracking libraries.
+# Network: public NOAA/NWS/USGS/OSM/Open-Meteo HTTPS APIs only.
+# AntiFeatures: none expected (UpstreamNonFree not applicable).
+
+Description: |-
+    U.S. National Weather Service point forecasts for Android — clear,
+    offline-friendly, and free software.
+
+    Features:
+    * Current conditions and multi-day NWS forecast
+    * Hourly tables (temperature, precip, wind, tides, air quality, space weather, …)
+    * Watches, warnings, and advisories
+    * Map picker (osmdroid, no Google Play Services) and city search
+    * Sun, moon, space weather, earthquakes, and severe weather summaries
+    * Home screen widget with bundled NWS icons
+
+    Privacy:
+    * No accounts, ads, or analytics
+    * Location only when you choose GPS / map
+    * Data stored only on device; HTTPS to public weather APIs
+
+    Not affiliated with NOAA or NWS. Uses public data only.
+
+Summary: NWS point forecasts, maps, and hazards — FOSS, no tracking

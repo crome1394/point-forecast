@@ -186,7 +186,7 @@ class SpaceWeatherService(
 
     companion object {
         private const val USER_AGENT =
-            "PointForecast/1.0 (Android; open-source; https://github.com/crome1394/forecast-point)"
+            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         /** Parse "G2", "R1", "S0" → 0–5 (unknown → 0). */
         fun scaleNumber(scale: String?): Int {

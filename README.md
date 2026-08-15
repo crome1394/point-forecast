@@ -77,7 +77,14 @@ Coverage for core forecast is **U.S. NWS points**. Use APIs politely (clear User
 
 ## Privacy
 
-No accounts. No analytics backend in this project. Location is used only when you pick GPS, map, or search. Network traffic goes to the public services above.
+No accounts. **No analytics, ads, or crash-reporting SDKs.** Location is used only when you pick GPS, map, or search. Network traffic goes to the public services above (HTTPS only). Full policy: [PRIVACY.md](PRIVACY.md).
+
+## F-Droid / free software
+
+- Source: this repository (MIT)
+- No proprietary Google Play Services; maps via **osmdroid**
+- Reproducible build notes: [RELEASE.md](RELEASE.md); sample metadata: [metadata/com.crome.forecastpoint.yml](metadata/com.crome.forecastpoint.yml)
+- Permissions are limited to network, optional location, and boot reschedule for optional auto-update
 
 ## Contributing
 

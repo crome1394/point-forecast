@@ -537,7 +537,7 @@ class TideService(
     private fun httpGet(url: String): String? {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", "PointForecast/1.0 (Android; open-source; personal use)")
+            .header("User-Agent", "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)")
             .header("Accept", "application/json, text/plain, */*")
             .get()
             .build()

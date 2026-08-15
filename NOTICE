@@ -39,8 +39,14 @@ These libraries are used under their respective open-source licenses
 (typically Apache 2.0). See each project for details.
 
 ### NWS forecast icons
-Weather condition icons are derived from the National Weather Service forecast
-icon set used on weather.gov (bundled for offline/reliable display).
+Weather condition icons are derived from the National Weather Service public
+forecast icon API (`api.weather.gov/icons`, land day/night set) and related
+legacy MapClick codes. Icons are **bundled** under `assets/nws_icons/` for
+offline display and to avoid weather.gov CDN blocks on stock Android clients.
+
+Coverage includes clear/sunny, clouds, rain, showers, snow, sleet, freezing
+rain, thunder, fog, haze, smoke, dust, wind, hot/cold, blizzard, hurricane,
+tropical storm, and tornado (day and night variants where published).
 
 ### NOAA Space Weather Prediction Center (SWPC)
 Planetary Kp index and geomagnetic scale products from services.swpc.noaa.gov.

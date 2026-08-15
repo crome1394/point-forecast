@@ -58,6 +58,14 @@ fun AboutScreen() {
             fontSize = 13.sp,
         )
         Text(
+            "Privacy\n" +
+                "No accounts, ads, or analytics. Location is used only when you choose GPS or the map. " +
+                "Data stays on your device; network traffic is HTTPS to public weather and map services only.",
+            color = OnSurfaceMuted,
+            modifier = Modifier.padding(top = 16.dp),
+            fontSize = 13.sp,
+        )
+        Text(
             "Source code",
             color = Color.White,
             fontWeight = FontWeight.SemiBold,

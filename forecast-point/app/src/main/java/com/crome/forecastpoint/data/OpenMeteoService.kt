@@ -138,7 +138,7 @@ class OpenMeteoService(
 
     companion object {
         private const val USER_AGENT =
-            "PointForecast/1.0 (Android; open-source; https://github.com/crome1394/forecast-point)"
+            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

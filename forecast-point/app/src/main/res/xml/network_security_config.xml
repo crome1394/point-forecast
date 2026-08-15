@@ -1,15 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  HTTPS only. No cleartext. Trust system CAs only (no user CAs).
+  Domains listed for documentation; all traffic uses TLS.
+-->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <!-- Explicit HTTPS-only for every host this app contacts -->
     <domain-config cleartextTrafficPermitted="false">
+        <!-- NWS / NOAA weather -->
         <domain includeSubdomains="true">weather.gov</domain>
         <domain includeSubdomains="true">api.weather.gov</domain>
         <domain includeSubdomains="true">forecast.weather.gov</domain>
+        <domain includeSubdomains="true">radar.weather.gov</domain>
         <domain includeSubdomains="true">tidesandcurrents.noaa.gov</domain>
+        <domain includeSubdomains="true">nhc.noaa.gov</domain>
+        <domain includeSubdomains="true">spc.noaa.gov</domain>
+        <domain includeSubdomains="true">swpc.noaa.gov</domain>
+        <domain includeSubdomains="true">services.swpc.noaa.gov</domain>
+        <!-- USGS -->
+        <domain includeSubdomains="true">earthquake.usgs.gov</domain>
+        <domain includeSubdomains="true">waterservices.usgs.gov</domain>
+        <!-- Maps / geocoding (no Google Play Services) -->
+        <domain includeSubdomains="true">openstreetmap.org</domain>
         <domain includeSubdomains="true">nominatim.openstreetmap.org</domain>
+        <domain includeSubdomains="true">basemaps.cartocdn.com</domain>
+        <!-- Optional hourly extras -->
+        <domain includeSubdomains="true">open-meteo.com</domain>
+        <domain includeSubdomains="true">api.open-meteo.com</domain>
+        <domain includeSubdomains="true">air-quality-api.open-meteo.com</domain>
     </domain-config>
 </network-security-config>
