@@ -1,0 +1,21 @@
+Point Forecast is an Android client for U.S. National Weather Service point
+forecasts. It is not affiliated with NOAA or NWS.
+
+Features:
+
+* Current conditions and multi-day NWS forecast
+* Hourly tables (temperature, precipitation, wind, tides/water level,
+  air quality, visibility, pressure, UV, space weather)
+* Watches, warnings, and advisories
+* Map location picker (osmdroid — no Google Play Services) and city search
+* Sun, moon, space weather, earthquakes, and severe weather summaries
+* Home screen widget with bundled NWS forecast icons
+
+Privacy:
+
+* No accounts, advertisements, or analytics
+* Location is used only when you choose GPS or the map
+* Preferences and cache stay on the device
+* HTTPS only to public weather and map services
+
+Source license: MIT. See NOTICE for third-party data and library credits.
