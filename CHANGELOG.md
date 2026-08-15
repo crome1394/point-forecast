@@ -7,10 +7,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-08-14
+
 ### Fixed
 
-- Map single-finger pan no longer opens the hamburger drawer (drawer edge-swipe disabled off the main Forecast screen; map owns pan gestures).
 - Tornado / Hurricane **active tropical cyclones** list (and map markers) limited to **Map focus radius** (same setting as zoom / tornado reports; default 250 mi).
+- Map single-finger pan no longer opens the hamburger drawer (drawer edge-swipe disabled off the main Forecast screen; map owns pan gestures).
 
 ### Added
 

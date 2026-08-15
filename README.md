@@ -28,7 +28,7 @@ U.S. National Weather Service **point forecasts** on Android—clear, offline-fr
 [**Releases**](https://github.com/crome1394/forecast-point/releases) — install the latest `PointForecast-*.apk`.
 
 ```bash
-adb install -r PointForecast-1.0.3.apk
+adb install -r PointForecast-1.1.2.apk
 ```
 
 ## Build
