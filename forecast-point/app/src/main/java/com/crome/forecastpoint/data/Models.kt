@@ -137,6 +137,8 @@ data class WeatherSnapshot(
     val sunset: String?,
     val hazards: List<WeatherHazard> = emptyList(),
     val tideInfo: TideInfo? = null,
+    /** IANA or GMT offset id for the forecast point (from NWS when available). */
+    val timeZoneId: String? = null,
 )
 
 data class GeocodeResult(

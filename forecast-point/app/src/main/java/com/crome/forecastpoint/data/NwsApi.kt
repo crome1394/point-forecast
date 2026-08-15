@@ -1,6 +1,7 @@
 package com.crome.forecastpoint.data
 
 import com.crome.forecastpoint.util.IconMapper
+import com.crome.forecastpoint.util.LocationTimeZone
 import com.crome.forecastpoint.util.SunCalculator
 import com.crome.forecastpoint.util.WeatherMath
 import kotlinx.coroutines.Dispatchers
@@ -614,7 +615,13 @@ class NwsApi(
             }
         }
 
-        val sun = SunCalculator.times(latitude, longitude)
+        val locationTz = LocationTimeZone.resolve(
+            latitude = latitude,
+            longitude = longitude,
+            nwsCode = location?.optString("timezone")?.takeIf { it.isNotBlank() },
+            isoDateTime = periods.firstOrNull()?.startTimeIso,
+        )
+        val sun = SunCalculator.times(latitude, longitude, locationTz)
         val days = buildDays(periods, sun.sunrise, sun.sunset)
         // Anchor hourly timeline to MapClick period starts — digitalJSON time/unixtime
         // labels are often wrong (e.g. "6 pm" + bad unix for data that is actually 10 pm).
@@ -669,6 +676,7 @@ class NwsApi(
             sunset = sun.sunset,
             hazards = hazards,
             tideInfo = tideInfo,
+            timeZoneId = locationTz.id,
         )
     }
 
@@ -1034,7 +1042,7 @@ class NwsApi(
 
     companion object {
         const val USER_AGENT =
-            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
+            "PointForecast/1.1.4 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

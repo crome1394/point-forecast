@@ -7,15 +7,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+## [1.1.4] — 2026-08-15
 
-- Full NWS forecast icon set bundled (day + night): smoke, haze, fog, dust, rain, snow, sleet, thunder variants, hurricane, tropical storm, tornado, etc.
-- [PRIVACY.md](PRIVACY.md) and F-Droid-oriented [metadata](metadata/com.crome.forecastpoint.yml)
+### Fixed
 
-### Changed
-
-- IconMapper aliases map modern api.weather.gov codes and legacy MapClick codes onto bundled assets
-- HTTPS-only network security config lists all contacted public hosts; removed unused notification / storage permissions
+- Sun/Moon times use the **forecast location** timezone (NWS zone), not the device timezone
+- Clearer message when a point is outside NWS coverage (no raw HTTP error URL); drop previous city forecast for out-of-coverage picks
+- Space weather (SWPC) is not fetched on empty cold start; loads after a location is set or when Space Weather / Hourly is opened
 
 ## [1.1.3] — 2026-08-15
 

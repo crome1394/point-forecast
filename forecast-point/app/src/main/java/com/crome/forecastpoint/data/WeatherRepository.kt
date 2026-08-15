@@ -93,11 +93,48 @@ class WeatherRepository(
             WeatherWidgetUpdater.updateAll(context, snap)
             snap
         } catch (e: Exception) {
-            _error.value = e.message ?: "Failed to fetch weather"
-            // Keep last good snapshot visible on failure
+            val friendly = friendlyWeatherError(e)
+            _error.value = friendly
+            // Out-of-coverage for a *new* point: do not keep showing the previous city.
+            val previous = _snapshot.value
+            val differentPlace = previous == null ||
+                previous.latitude != latitude ||
+                previous.longitude != longitude
+            if (differentPlace && isOutOfCoverageError(e)) {
+                _snapshot.value = null
+            }
+            // Transient failures: keep last good snapshot when same place (or network blip).
             null
         } finally {
             _loading.value = false
+        }
+    }
+
+    private fun isOutOfCoverageError(e: Throwable): Boolean {
+        val msg = e.message.orEmpty()
+        return msg.contains("HTTP 400") || msg.contains("HTTP 404")
+    }
+
+    /** User-facing text instead of raw "HTTP 400 for https://…" URLs. */
+    private fun friendlyWeatherError(e: Throwable): String {
+        val msg = e.message.orEmpty()
+        return when {
+            msg.contains("HTTP 400") || msg.contains("HTTP 404") ->
+                "This location is outside the U.S. National Weather Service coverage area. " +
+                    "Choose a place in the United States or territories for a forecast."
+            msg.contains("HTTP 403") ->
+                "The weather service temporarily refused the request. Try again in a moment."
+            msg.contains("HTTP 5") ->
+                "The weather service is temporarily unavailable. Try again later."
+            msg.contains("timeout", ignoreCase = true) ||
+                msg.contains("Unable to resolve", ignoreCase = true) ||
+                msg.contains("Failed to connect", ignoreCase = true) ||
+                msg.contains("UnknownHost", ignoreCase = true) ->
+                "Could not reach weather services. Check your connection and try again."
+            msg.startsWith("HTTP ") ->
+                "Could not load a forecast for this location."
+            msg.isBlank() -> "Failed to fetch weather"
+            else -> msg
         }
     }
 

@@ -61,6 +61,7 @@ import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
 import com.crome.forecastpoint.util.CelestialCalculator
+import com.crome.forecastpoint.util.LocationTimeZone
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -82,6 +83,8 @@ fun SunMoonScreen(
     locationName: String?,
     /** Controlled from the title bar (Sun / Moon / Space weather / Earthquakes). */
     body: CelestialBody,
+    /** Forecast-location zone id (IANA or GMT±); null falls back to coordinate estimate. */
+    timeZoneId: String? = null,
     spaceWeather: SpaceWeatherService.Snapshot? = null,
     spaceWeatherWatchThreshold: Int = 1,
     spaceWeatherActiveThreshold: Int = 2,
@@ -104,8 +107,10 @@ fun SunMoonScreen(
     ) -> Unit)? = null,
     mapFocusRadiusMiles: Int = 250,
     hazardHistoryDays: Int = 7,
+    onEnsureSpaceWeather: (() -> Unit)? = null,
 ) {
     if (body == CelestialBody.SpaceWeather) {
+        LaunchedEffect(Unit) { onEnsureSpaceWeather?.invoke() }
         SpaceWeatherSummaryScreen(
             snapshot = spaceWeather,
             watchThreshold = spaceWeatherWatchThreshold,
@@ -142,8 +147,12 @@ fun SunMoonScreen(
     }
 
     var aboutExpanded by remember { mutableStateOf(false) }
-    val tz = remember { TimeZone.getDefault() }
-    val today = remember {
+    // Use the forecast location's zone, not the device zone (e.g. RI while phone is in CEST).
+    val tz = remember(latitude, longitude, timeZoneId) {
+        timeZoneId?.let { TimeZone.getTimeZone(it) }
+            ?: LocationTimeZone.resolve(latitude, longitude)
+    }
+    val today = remember(tz) {
         Calendar.getInstance(tz).apply {
             set(Calendar.HOUR_OF_DAY, 12)
             set(Calendar.MINUTE, 0)
@@ -158,9 +167,15 @@ fun SunMoonScreen(
     )
     val scope = rememberCoroutineScope()
 
-    val dayLabelFmt = remember { SimpleDateFormat("EEE", Locale.US) }
-    val dateFmt = remember { SimpleDateFormat("d", Locale.US) }
-    val monthFmt = remember { SimpleDateFormat("MMM", Locale.US) }
+    val dayLabelFmt = remember(tz) {
+        SimpleDateFormat("EEE", Locale.US).apply { timeZone = tz }
+    }
+    val dateFmt = remember(tz) {
+        SimpleDateFormat("d", Locale.US).apply { timeZone = tz }
+    }
+    val monthFmt = remember(tz) {
+        SimpleDateFormat("MMM", Locale.US).apply { timeZone = tz }
+    }
 
     LaunchedEffect(body) { aboutExpanded = false }
 
@@ -245,13 +260,13 @@ fun SunMoonScreen(
             key = { DayOffsets[it] },
         ) { dayPage ->
             val off = DayOffsets[dayPage]
-            val dayCal = remember(off) {
+            val dayCal = remember(off, tz) {
                 (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, off) }
             }
-            val sun = remember(latitude, longitude, off) {
+            val sun = remember(latitude, longitude, off, tz) {
                 CelestialCalculator.sunDay(latitude, longitude, tz, dayCal)
             }
-            val moon = remember(latitude, longitude, off) {
+            val moon = remember(latitude, longitude, off, tz) {
                 CelestialCalculator.moonDay(
                     latitude = latitude,
                     longitude = longitude,

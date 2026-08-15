@@ -198,8 +198,18 @@ class MainActivity : ComponentActivity() {
                 // Title-bar icon: sun by day, moon by night at the active (or default) point
                 val celestialLat = snapshot?.latitude ?: 39.8283
                 val celestialLon = snapshot?.longitude ?: -98.5795
-                val showDayIcon = remember(celestialLat, celestialLon, snapshot?.updatedAtEpochMs) {
-                    CelestialCalculator.isDaytime(celestialLat, celestialLon)
+                val showDayIcon = remember(
+                    celestialLat,
+                    celestialLon,
+                    snapshot?.updatedAtEpochMs,
+                    snapshot?.timeZoneId,
+                ) {
+                    val tz = snapshot?.timeZoneId?.let { java.util.TimeZone.getTimeZone(it) }
+                        ?: com.crome.forecastpoint.util.LocationTimeZone.resolve(
+                            celestialLat,
+                            celestialLon,
+                        )
+                    CelestialCalculator.isDaytime(celestialLat, celestialLon, tz)
                 }
                 val spaceAlert = remember(
                     spaceWeather,
@@ -547,12 +557,17 @@ class MainActivity : ComponentActivity() {
                                     onOpenMap = { openMap() },
                                     onRefresh = { viewModel.manualRefresh() },
                                 )
-                                AppScreen.Hourly -> HourlyScreen(
-                                    hourly = snapshot?.hourly.orEmpty(),
-                                    tideInfo = snapshot?.tideInfo,
-                                    spaceWeather = spaceWeather,
-                                    tabConfig = hourlyTabConfig,
-                                )
+                                AppScreen.Hourly -> {
+                                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                                        viewModel.ensureSpaceWeather()
+                                    }
+                                    HourlyScreen(
+                                        hourly = snapshot?.hourly.orEmpty(),
+                                        tideInfo = snapshot?.tideInfo,
+                                        spaceWeather = spaceWeather,
+                                        tabConfig = hourlyTabConfig,
+                                    )
+                                }
                                 AppScreen.Search -> SearchScreen(
                                     results = searchResults,
                                     searching = searching,
@@ -632,6 +647,7 @@ class MainActivity : ComponentActivity() {
                                     longitude = celestialLon,
                                     locationName = snapshot?.locationName,
                                     body = sunMoonBody,
+                                    timeZoneId = snapshot?.timeZoneId,
                                     spaceWeather = spaceWeather,
                                     spaceWeatherWatchThreshold = spaceWeatherWatchThreshold,
                                     spaceWeatherActiveThreshold = spaceWeatherActiveThreshold,
@@ -662,6 +678,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
                                     hazardHistoryDays = hazardHistoryDays,
+                                    onEnsureSpaceWeather = { viewModel.ensureSpaceWeather() },
                                 )
                             }
                         }
