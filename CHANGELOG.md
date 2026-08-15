@@ -10,6 +10,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Map single-finger pan no longer opens the hamburger drawer (drawer edge-swipe disabled off the main Forecast screen; map owns pan gestures).
+- Tornado / Hurricane **active tropical cyclones** list (and map markers) limited to **Map focus radius** (same setting as zoom / tornado reports; default 250 mi).
 
 ### Added
 
@@ -25,7 +26,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - **Hourly tab order + enable** unified in Settings (all tabs, including Temperature / Conditions)
 - **Pull-to-refresh** on the main Forecast screen
 - Favorite **star** toggles save/remove of the active location (including Current Location, with reverse-geocode name)
-- Map **focus radius** setting (default 250 mi) for earthquake and tornado/hurricane maps
+- Map **focus radius** setting (default 250 mi) for earthquake and tornado/hurricane maps, history lists, and nearby active tropical cyclones
 - Full-screen expand control on hazard maps; one-finger pan in scrollable screens
 - Light basemap on hazard maps for readability
 

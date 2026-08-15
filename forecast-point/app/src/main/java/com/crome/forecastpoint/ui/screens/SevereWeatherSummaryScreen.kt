@@ -266,12 +266,21 @@ fun SevereWeatherSummaryScreen(
                     Spacer(Modifier.width(8.dp))
                     Column {
                         Text("Active tropical cyclones", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text("NOAA National Hurricane Center · worldwide active list", color = OnSurfaceMuted, fontSize = 12.sp)
+                        Text(
+                            "NOAA NHC · within ${mapFocusRadiusMiles} mi of city (Settings → Map focus)",
+                            color = OnSurfaceMuted,
+                            fontSize = 12.sp,
+                        )
                     }
                 }
                 val storms = snapshot?.tropicalStorms.orEmpty()
                 if (storms.isEmpty()) {
-                    Text("No active tropical cyclones reported by NHC.", color = OnSurfaceMuted, fontSize = 13.sp)
+                    Text(
+                        "No active tropical cyclones within ${mapFocusRadiusMiles} mi of this city. " +
+                            "Widen Map focus radius in Settings, or check NHC if storms are elsewhere.",
+                        color = OnSurfaceMuted,
+                        fontSize = 13.sp,
+                    )
                 } else {
                     storms.forEach { s ->
                         Column(
@@ -422,6 +431,10 @@ fun SevereWeatherSummaryScreen(
                             "• NHC CurrentStorms.json — active tropical cyclones (Atlantic, E. Pacific, C. Pacific).\n" +
                             "• NWS api.weather.gov alerts for your lat/lon — tornado / tropical watches & warnings.\n" +
                             "• SPC daily tornado report CSVs — preliminary local storm reports (not a forecast).\n\n" +
+                            "Distance filter\n" +
+                            "Active tropical cyclones and SPC tornado reports are limited to the " +
+                            "Map focus radius (Settings → Map), same as the map zoom (default 250 mi). " +
+                            "Storms farther away are omitted from the list and map markers.\n\n" +
                             "Validation\n" +
                             "Storm names, intensity, and positions match NHC’s public JSON. " +
                             "Alert events match NWS CAP for the point. SPC rows match " +
