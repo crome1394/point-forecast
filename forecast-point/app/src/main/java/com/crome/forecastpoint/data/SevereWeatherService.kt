@@ -83,8 +83,9 @@ class SevereWeatherService(
     )
 
     /**
-     * @param focusRadiusMiles user map-focus setting; limits SPC tornado report distance
-     *   (and map context) to match earthquake/history radius.
+     * @param focusRadiusMiles user map-focus setting (Settings → Map); limits
+     *   active tropical cyclones, SPC tornado reports, and map context to that
+     *   distance from the selected city.
      */
     suspend fun fetchAround(
         latitude: Double,
@@ -111,7 +112,9 @@ class SevereWeatherService(
                 runCatching { fetchLocalSevereAlerts(latitude, longitude) }
                     .getOrElse { emptyList() }
             }
-            val storms = stormsDef.await()
+            val allStorms = stormsDef.await()
+            // Same radius as map zoom / tornado history
+            val storms = allStorms.filter { it.distanceMiles <= focusMiles }
             val reports = reportsDef.await()
             val alerts = alertsDef.await()
             Snapshot(
@@ -123,8 +126,13 @@ class SevereWeatherService(
                 updatedAtEpochMs = System.currentTimeMillis(),
                 error = null,
                 querySummary =
-                    "NHC active tropical: ${storms.size} · " +
-                        "SPC tornado reports (7d, ≤${focusRadiusMiles} mi): ${reports.size} · " +
+                    "NHC tropical within ${focusRadiusMiles} mi: ${storms.size}" +
+                        (if (allStorms.size != storms.size) {
+                            " (${allStorms.size} active worldwide)"
+                        } else {
+                            ""
+                        }) +
+                        " · SPC tornado reports (7d, ≤${focusRadiusMiles} mi): ${reports.size} · " +
                         "NWS local tornado/tropical alerts: ${alerts.size}",
             )
         }

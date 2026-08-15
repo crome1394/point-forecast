@@ -21,7 +21,7 @@ U.S. National Weather Service **point forecasts** on Android—clear, offline-fr
 - **Radar** link (weather.gov) from the app bar
 - **Sun / moon / space weather / earthquakes / tornado & hurricane** summaries (title-bar menu, drawer, body switcher tabs)
 - **Home widget** with bundled NWS icons (works on CalyxOS)
-- **Settings** for layout, widget mode, hourly tabs, hamburger menu, map focus radius, space weather cue thresholds
+- **Settings** for layout, widget mode, hourly tabs, hamburger menu, map focus radius (hazard maps, quake/tornado history, nearby tropical cyclones), space weather cue thresholds
 
 ## Download
 
