@@ -74,6 +74,7 @@ import com.crome.forecastpoint.data.GeocodeResult
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
+import com.crome.forecastpoint.util.MapHelpers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -720,7 +721,7 @@ private fun createMapView(
 
     return MapView(context).apply {
         setTileSource(CartoLightTiles)
-        // Pinch-to-zoom on; single-finger pan is default and works full-screen
+        // Pinch-to-zoom on; single-finger pan is default
         setMultiTouchControls(true)
         setFlingEnabled(true)
         isTilesScaledToDpi = true
@@ -729,6 +730,8 @@ private fun createMapView(
         controller.setCenter(GeoPoint(lat, lon))
         minZoomLevel = 3.0
         maxZoomLevel = 18.0
+        // Keep parent NavigationDrawer from stealing horizontal pans
+        MapHelpers.enableSingleFingerPanInScrollParent(this)
         val scale = ScaleBarOverlay(this)
         scale.setAlignBottom(true)
         scale.setAlignRight(false)

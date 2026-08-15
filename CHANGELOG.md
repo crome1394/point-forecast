@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Map single-finger pan no longer opens the hamburger drawer (drawer edge-swipe disabled off the main Forecast screen; map owns pan gestures).
+
 ### Added
 
 - **Celestial / hazards hub** from the title-bar sun/moon control and the drawer:

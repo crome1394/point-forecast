@@ -20,25 +20,27 @@ object MapHelpers {
      * (Compose verticalScroll / LazyColumn) by blocking parent intercept while touching the map.
      */
     fun enableSingleFingerPanInScrollParent(mapView: MapView) {
+        fun disallowParents(v: View, disallow: Boolean) {
+            var p = v.parent
+            while (p is ViewGroup) {
+                p.requestDisallowInterceptTouchEvent(disallow)
+                p = p.parent
+            }
+        }
         mapView.setOnTouchListener { v, event ->
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                    // One finger is enough to own the gesture (pan); multi-finger still zooms
-                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                MotionEvent.ACTION_DOWN,
+                MotionEvent.ACTION_MOVE,
+                MotionEvent.ACTION_POINTER_DOWN,
+                -> {
+                    // Own the gesture so Compose drawer / scroll parents do not steal pan
+                    disallowParents(v, true)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    disallowParents(v, false)
                 }
             }
             false // map still handles the event
-        }
-        // Also walk up the parent chain (Compose nest)
-        mapView.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            var p = v.parent
-            while (p is ViewGroup) {
-                p.requestDisallowInterceptTouchEvent(false)
-                p = p.parent
-            }
         }
     }
 

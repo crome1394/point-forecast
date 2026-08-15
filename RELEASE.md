@@ -21,11 +21,13 @@ Wire signing in `app/build.gradle.kts` if not already configured for release.
 
 ## Version numbers
 
-1. Choose the next version (semver). Feature-heavy branch → **1.1.0** is appropriate after 1.0.3.
+1. Choose the next version (semver).
+   - Feature drop after 1.0.3 → **1.1.0**
+   - Bug fix after 1.1.0 → **1.1.1** (`versionCode` +1)
 2. Update `forecast-point/app/build.gradle.kts`:
-   - `versionName = "1.1.0"`
-   - `versionCode` must increase (e.g. `5` if 1.0.3 was `4`)
-3. Move `[Unreleased]` notes in [CHANGELOG.md](CHANGELOG.md) under `## [1.1.0] — YYYY-MM-DD`
+   - `versionName = "1.1.1"`
+   - `versionCode` must increase (e.g. `6` if 1.1.0 was `5`)
+3. Move `[Unreleased]` notes in [CHANGELOG.md](CHANGELOG.md) under `## [1.1.1] — YYYY-MM-DD` (or merge the bugfix into the version you are about to ship)
 4. Leave a fresh empty `## [Unreleased]` section at the top
 5. Update any version examples in [README.md](README.md) if they name a specific APK
 

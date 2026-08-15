@@ -322,8 +322,15 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                // Disable edge-swipe to open the drawer while on Map (and other non-Forecast
+                // screens). Otherwise a single-finger map pan is stolen as "open menu".
+                // Still allow swipe-to-close when the drawer is already open.
+                val drawerGesturesEnabled =
+                    drawerState.isOpen || screen == AppScreen.Forecast
+
                 ModalNavigationDrawer(
                     drawerState = drawerState,
+                    gesturesEnabled = drawerGesturesEnabled,
                     drawerContent = {
                         AppDrawer(
                             favorites = favorites,
