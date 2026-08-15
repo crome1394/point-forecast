@@ -92,7 +92,7 @@ class SevereWeatherService(
         longitude: Double,
         focusRadiusMiles: Int = 250,
     ): Snapshot = withContext(Dispatchers.IO) {
-        val focusMiles = focusRadiusMiles.toDouble().coerceIn(25.0, 1500.0)
+        val focusMiles = focusRadiusMiles.toDouble().coerceIn(25.0, 4000.0)
         coroutineScope {
             val stormsDef = async {
                 runCatching { fetchTropicalStorms(latitude, longitude) }

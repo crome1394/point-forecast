@@ -7,6 +7,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Hazard screens: **ad-hoc explore distance** chips + slider (does not change Settings default); up to **4000 mi**
+- Earthquake screen: **minimum magnitude** slider
+- Tornado / Hurricane screen: **tropical strength** (knots) and **tornado EF category** sliders
+- Settings map focus radius options extended through **4000 miles**
+- About screen thanks to Javier Velasquez for UX ideas, troubleshooting, and QA
+- Clearer plain-language legends on earthquake and storm About sections (acronyms expanded)
+
 ## [1.1.2] — 2026-08-14
 
 ### Fixed

@@ -148,9 +148,16 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Load USGS quakes around the active city (or given point). */
-    fun ensureEarthquakes(latitude: Double, longitude: Double) {
-        val radius = mapFocusRadiusMiles.value
+    /**
+     * Load USGS quakes around a point.
+     * @param focusRadiusMiles optional ad-hoc radius (does not change Settings default).
+     */
+    fun ensureEarthquakes(
+        latitude: Double,
+        longitude: Double,
+        focusRadiusMiles: Int? = null,
+    ) {
+        val radius = focusRadiusMiles ?: mapFocusRadiusMiles.value
         val current = _earthquakes.value
         if (current != null &&
             kotlin.math.abs(current.latitude - latitude) < 0.05 &&
@@ -162,18 +169,21 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         }
         earthquakeJob?.cancel()
         earthquakeJob = viewModelScope.launch {
-            refreshEarthquakes(latitude, longitude)
+            refreshEarthquakes(latitude, longitude, radius)
         }
     }
 
-    private suspend fun refreshEarthquakes(latitude: Double, longitude: Double) {
+    private suspend fun refreshEarthquakes(
+        latitude: Double,
+        longitude: Double,
+        focusRadiusMiles: Int = mapFocusRadiusMiles.value,
+    ) {
         _earthquakesLoading.value = true
-        val radius = mapFocusRadiusMiles.value
         runCatching {
             _earthquakes.value = earthquakeService.fetchAround(
                 latitude,
                 longitude,
-                focusRadiusMiles = radius,
+                focusRadiusMiles = focusRadiusMiles,
             )
         }.onFailure {
             _earthquakes.value = EarthquakeService.Snapshot(
@@ -190,31 +200,42 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         _earthquakesLoading.value = false
     }
 
-    fun ensureSevereWeather(latitude: Double, longitude: Double) {
-        val radius = mapFocusRadiusMiles.value
+    /**
+     * Load tornado/hurricane context.
+     * @param focusRadiusMiles optional ad-hoc radius (does not change Settings default).
+     */
+    fun ensureSevereWeather(
+        latitude: Double,
+        longitude: Double,
+        focusRadiusMiles: Int? = null,
+    ) {
+        val radius = focusRadiusMiles ?: mapFocusRadiusMiles.value
         val current = _severeWeather.value
         if (current != null &&
             kotlin.math.abs(current.latitude - latitude) < 0.05 &&
             kotlin.math.abs(current.longitude - longitude) < 0.05 &&
-            System.currentTimeMillis() - current.updatedAtEpochMs < 10 * 60 * 1000L
+            System.currentTimeMillis() - current.updatedAtEpochMs < 10 * 60 * 1000L &&
+            current.querySummary.contains("${radius} mi")
         ) {
-            // Still refresh if focus radius changed (encoded in querySummary)
-            if (current.querySummary.contains("≤$radius mi")) return
+            return
         }
         severeWeatherJob?.cancel()
         severeWeatherJob = viewModelScope.launch {
-            refreshSevereWeather(latitude, longitude)
+            refreshSevereWeather(latitude, longitude, radius)
         }
     }
 
-    private suspend fun refreshSevereWeather(latitude: Double, longitude: Double) {
+    private suspend fun refreshSevereWeather(
+        latitude: Double,
+        longitude: Double,
+        focusRadiusMiles: Int = mapFocusRadiusMiles.value,
+    ) {
         _severeWeatherLoading.value = true
-        val radius = mapFocusRadiusMiles.value
         runCatching {
             _severeWeather.value = severeWeatherService.fetchAround(
                 latitude,
                 longitude,
-                focusRadiusMiles = radius,
+                focusRadiusMiles = focusRadiusMiles,
             )
         }.onFailure {
             _severeWeather.value = SevereWeatherService.Snapshot(

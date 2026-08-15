@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -35,6 +34,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,6 +68,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.roundToInt
+
+private val QuakeAccent = Color(0xFFFF8A65)
 
 /** Light basemap for readable labels / roads on hazard maps. */
 private val CartoLightTiles: OnlineTileSourceBase = object : XYTileSource(
@@ -98,15 +102,44 @@ fun EarthquakeSummaryScreen(
     locationName: String?,
     snapshot: EarthquakeService.Snapshot?,
     loading: Boolean,
-    mapFocusRadiusMiles: Int = PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
+    settingsDefaultRadiusMiles: Int = PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
+    onExploreRadius: (Int) -> Unit = {},
 ) {
     var aboutExpanded by remember { mutableStateOf(false) }
     var mapFullscreen by remember { mutableStateOf(false) }
+    var exploreRadius by remember(settingsDefaultRadiusMiles) {
+        mutableIntStateOf(settingsDefaultRadiusMiles)
+    }
+    var minMagnitude by remember { mutableFloatStateOf(1.0f) }
     val uriHandler = LocalUriHandler.current
     val timeFmt = remember {
         SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).apply {
             timeZone = TimeZone.getDefault()
         }
+    }
+
+    LaunchedEffect(latitude, longitude, exploreRadius) {
+        onExploreRadius(exploreRadius)
+    }
+
+    val filteredRecent = remember(snapshot, minMagnitude) {
+        snapshot?.recentAll
+            ?.filter { (it.magnitude ?: 0.0) >= minMagnitude.toDouble() }
+            ?.sortedBy { it.distanceMiles }
+            .orEmpty()
+    }
+    val filteredHistorical = remember(snapshot, minMagnitude) {
+        snapshot?.historical
+            ?.filter { (it.magnitude ?: 0.0) >= minMagnitude.toDouble().coerceAtLeast(4.0) }
+            ?.sortedByDescending { it.magnitude ?: 0.0 }
+            .orEmpty()
+            .ifEmpty {
+                // If min mag slider is above 4, filter historical; if below 4, show all historical M4+
+                snapshot?.historical
+                    ?.filter { (it.magnitude ?: 0.0) >= minMagnitude.toDouble() }
+                    ?.sortedByDescending { it.magnitude ?: 0.0 }
+                    .orEmpty()
+            }
     }
 
     Column(
@@ -117,7 +150,7 @@ fun EarthquakeSummaryScreen(
             .padding(bottom = 24.dp),
     ) {
         Text(
-            "USGS Earthquake Hazards Program",
+            "U.S. Geological Survey (USGS) earthquake catalog",
             color = OnSurfaceMuted,
             fontSize = 13.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -129,12 +162,32 @@ fun EarthquakeSummaryScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
+        HazardExploreRadiusCard(
+            exploreRadiusMiles = exploreRadius,
+            settingsDefaultMiles = settingsDefaultRadiusMiles,
+            onRadiusChange = { exploreRadius = it },
+            accent = QuakeAccent,
+            title = "Explore distance",
+            subtitle = "Look around this city — temporary, not Settings",
+        )
+
+        HazardFilterSliderCard(
+            title = "Minimum magnitude",
+            valueLabel = "M${String.format(Locale.US, "%.1f", minMagnitude)}+",
+            value = minMagnitude,
+            valueRange = 1.0f..6.0f,
+            steps = 9, // 0.5 steps: 1.0, 1.5, … 6.0
+            accent = QuakeAccent,
+            onValueChange = { minMagnitude = (it * 2).roundToInt() / 2f },
+            help = "Hide smaller quakes (magnitude = strength on the Richter-style scale)",
+        )
+
         if (loading && snapshot == null) {
             CircularProgressIndicator(
                 Modifier
                     .padding(32.dp)
                     .align(Alignment.CenterHorizontally),
-                color = Color(0xFFFF8A65),
+                color = QuakeAccent,
             )
             Text(
                 "Loading earthquakes…",
@@ -147,15 +200,9 @@ fun EarthquakeSummaryScreen(
         }
 
         snapshot?.error?.let { err ->
-            Text(
-                err,
-                color = Color(0xFFEF9A9A),
-                fontSize = 13.sp,
-                modifier = Modifier.padding(16.dp),
-            )
+            Text(err, color = Color(0xFFEF9A9A), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
         }
 
-        // Map centered on city with quake markers
         Surface(
             Modifier
                 .fillMaxWidth()
@@ -167,9 +214,9 @@ fun EarthquakeSummaryScreen(
             EarthquakeMap(
                 centerLat = latitude,
                 centerLon = longitude,
-                recent = snapshot?.recentAll.orEmpty().take(40),
-                historical = snapshot?.historical.orEmpty().take(12),
-                focusRadiusMiles = mapFocusRadiusMiles,
+                recent = filteredRecent.take(40),
+                historical = filteredHistorical.take(12),
+                focusRadiusMiles = exploreRadius,
                 onExpandFullscreen = { mapFullscreen = true },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -180,36 +227,29 @@ fun EarthquakeSummaryScreen(
                 onDismissRequest = { mapFullscreen = false },
                 properties = DialogProperties(usePlatformDefaultWidth = false),
             ) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                ) {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
                     EarthquakeMap(
                         centerLat = latitude,
                         centerLon = longitude,
-                        recent = snapshot?.recentAll.orEmpty().take(40),
-                        historical = snapshot?.historical.orEmpty().take(12),
-                        focusRadiusMiles = mapFocusRadiusMiles,
+                        recent = filteredRecent.take(40),
+                        historical = filteredHistorical.take(12),
+                        focusRadiusMiles = exploreRadius,
                         onExpandFullscreen = null,
                         modifier = Modifier.fillMaxSize(),
                     )
                     IconButton(
                         onClick = { mapFullscreen = false },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                     ) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close full screen", tint = Color.White)
+                        Icon(Icons.Filled.Close, "Close full screen", tint = Color.White)
                     }
                 }
             }
         }
 
         Text(
-            (snapshot?.querySummary
-                ?: "Search radius expands if the area is quiet (USGS FDSN)") +
-                " · map focus ${mapFocusRadiusMiles} mi (Settings)",
+            snapshot?.querySummary
+                ?: "Showing events within $exploreRadius mi · min M${String.format(Locale.US, "%.1f", minMagnitude)}",
             color = OnSurfaceMuted,
             fontSize = 11.sp,
             lineHeight = 14.sp,
@@ -219,33 +259,22 @@ fun EarthquakeSummaryScreen(
         Spacer(Modifier.height(12.dp))
 
         QuakeSection(
-            title = "Nearest M2.5+ (30 days)",
-            subtitle = "Matches many public maps that hide microquakes · nearest first",
-            quakes = snapshot?.recentNotable.orEmpty(),
+            title = "Recent (30 days)",
+            subtitle = "M${String.format(Locale.US, "%.1f", minMagnitude)}+ within $exploreRadius mi · nearest first",
+            quakes = filteredRecent,
             timeFmt = timeFmt,
-            emptyMessage = "No M2.5+ events in this search radius (30 days).",
+            emptyMessage = "No recent quakes at this magnitude within $exploreRadius mi.",
             onOpen = { url -> uriHandler.openUri(url) },
         )
 
         Spacer(Modifier.height(12.dp))
 
         QuakeSection(
-            title = "All M1.0+ (30 days)",
-            subtitle = "Full USGS catalog including microquakes · nearest first",
-            quakes = snapshot?.recentAll.orEmpty(),
+            title = "Historical (10 years)",
+            subtitle = "Larger past events within $exploreRadius mi · strongest first",
+            quakes = filteredHistorical,
             timeFmt = timeFmt,
-            emptyMessage = "No M1.0+ events nearby — radius expands up to ~800 km for quiet regions.",
-            onOpen = { url -> uriHandler.openUri(url) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        QuakeSection(
-            title = "Historical notable (10 years)",
-            subtitle = "M4.0+ within ${mapFocusRadiusMiles} mi of city · strongest first",
-            quakes = snapshot?.historical.orEmpty(),
-            timeFmt = timeFmt,
-            emptyMessage = "No M4.0+ events within ${mapFocusRadiusMiles} mi over the last 10 years.",
+            emptyMessage = "No historical events at this magnitude within $exploreRadius mi.",
             onOpen = { url -> uriHandler.openUri(url) },
         )
 
@@ -270,27 +299,30 @@ fun EarthquakeSummaryScreen(
                     )
                     Icon(
                         if (aboutExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = null,
+                        null,
                         tint = OnSurfaceMuted,
                     )
                 }
                 AnimatedVisibility(visible = aboutExpanded) {
                     Text(
-                        "Source of truth: USGS Earthquake Hazards Program FDSN API " +
-                            "(earthquake.usgs.gov/fdsnws/event/1) — the same catalog used by " +
-                            "earthquake.usgs.gov maps.\n\n" +
-                            "Why other apps look different\n" +
-                            "• Many apps default to M2.5+ or “significant only”; we also list M1.0+.\n" +
-                            "• California (Sacramento, Hemet) has many small geothermal/tectonic " +
-                            "events — large M1+ counts are expected and match USGS.\n" +
-                            "• New York City often has zero M1+ within 200 km in a quiet month; " +
-                            "we expand the radius (up to ~800 km) so you still see regional events " +
-                            "(e.g. New England). That is USGS data, not a local gap in our app.\n\n" +
-                            "What we show\n" +
-                            "• M2.5+ (30 days) — nearest first — closer to common consumer maps\n" +
-                            "• M1.0+ (30 days) — full regional catalog, nearest first\n" +
-                            "• Historical M4.0+ (10 years) — strongest first\n\n" +
-                            "Tap a row for the official USGS event page. Times use your device zone.",
+                        "Data source\n" +
+                            "U.S. Geological Survey (USGS) Earthquake Hazards Program — the same " +
+                            "public catalog used on earthquake.usgs.gov.\n\n" +
+                            "Terms\n" +
+                            "• Magnitude (M) — how strong the quake was (e.g. M2.5 is small; M6 is " +
+                            "major). Sometimes called the Richter-style scale; modern catalogs use " +
+                            "moment magnitude.\n" +
+                            "• Depth (km) — how deep the quake was, in kilometers below the surface.\n" +
+                            "• FDSN — Federation of Digital Seismograph Networks; the open standard " +
+                            "API USGS uses for event queries.\n" +
+                            "• mi — miles from your selected city (straight-line distance).\n\n" +
+                            "Explore distance\n" +
+                            "The chips and slider change only this screen’s temporary radius. " +
+                            "Your Settings → Map focus radius default is unchanged.\n\n" +
+                            "Why lists differ from other apps\n" +
+                            "Many apps hide small quakes (below M2.5). California often has many " +
+                            "small events; New York may need a larger distance to show anything. " +
+                            "Tap a row for the official USGS event page.",
                         color = Color(0xFFCFD8DC),
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
@@ -320,7 +352,7 @@ private fun QuakeSection(
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Public, null, tint = Color(0xFFFF8A65), modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Public, null, tint = QuakeAccent, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Column {
                     Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -330,7 +362,6 @@ private fun QuakeSection(
             if (quakes.isEmpty()) {
                 Text(emptyMessage, color = OnSurfaceMuted, fontSize = 13.sp)
             } else {
-                // Header
                 Row(Modifier.fillMaxWidth()) {
                     Text("Mag", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
                     Text("When / where", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
@@ -340,9 +371,7 @@ private fun QuakeSection(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = q.url != null) {
-                                q.url?.let(onOpen)
-                            }
+                            .clickable(enabled = q.url != null) { q.url?.let(onOpen) }
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.Top,
                     ) {
@@ -354,16 +383,8 @@ private fun QuakeSection(
                             modifier = Modifier.width(40.dp),
                         )
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                timeFmt.format(Date(q.timeEpochMs)),
-                                color = Color(0xFFCFD8DC),
-                                fontSize = 12.sp,
-                            )
-                            Text(
-                                q.place,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                            )
+                            Text(timeFmt.format(Date(q.timeEpochMs)), color = Color(0xFFCFD8DC), fontSize = 12.sp)
+                            Text(q.place, color = Color.White, fontSize = 13.sp)
                             q.depthKm?.let {
                                 Text(
                                     "Depth ${String.format(Locale.US, "%.1f", it)} km",
@@ -402,7 +423,7 @@ private fun EarthquakeMap(
         Configuration.getInstance().osmdroidTileCache = context.cacheDir.resolve("osmdroid")
         MapView(context).apply {
             setTileSource(CartoLightTiles)
-            setMultiTouchControls(true) // pinch zoom; single-finger pan still works
+            setMultiTouchControls(true)
             setFlingEnabled(true)
             isTilesScaledToDpi = true
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
@@ -411,7 +432,6 @@ private fun EarthquakeMap(
         }
     }
 
-    // Update markers + focus radius when data / settings change
     LaunchedEffect(centerLat, centerLon, recent, historical, focusRadiusMiles) {
         mapView.overlays.removeAll { it is Marker }
         mapView.overlays.add(
@@ -441,13 +461,7 @@ private fun EarthquakeMap(
                 },
             )
         }
-        MapHelpers.zoomToRadiusMiles(
-            mapView,
-            centerLat,
-            centerLon,
-            focusRadiusMiles.toDouble(),
-            animate = false,
-        )
+        MapHelpers.zoomToRadiusMiles(mapView, centerLat, centerLon, focusRadiusMiles.toDouble())
         mapView.invalidate()
     }
 
@@ -460,14 +474,9 @@ private fun EarthquakeMap(
     }
 
     Box(modifier) {
-        AndroidView(
-            factory = { mapView },
-            modifier = Modifier.fillMaxSize(),
-        )
+        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
         Surface(
-            Modifier
-                .align(Alignment.TopStart)
-                .padding(8.dp),
+            Modifier.align(Alignment.TopStart).padding(8.dp),
             color = Color(0xEEFFFFFF),
             shape = RoundedCornerShape(8.dp),
         ) {
@@ -477,27 +486,17 @@ private fun EarthquakeMap(
             ) {
                 Icon(Icons.Filled.Place, null, tint = PrimaryBlue, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(
-                    "Focus ${focusRadiusMiles} mi · one-finger pan",
-                    color = Color(0xFF263238),
-                    fontSize = 11.sp,
-                )
+                Text("Focus $focusRadiusMiles mi · one-finger pan", color = Color(0xFF263238), fontSize = 11.sp)
             }
         }
         if (onExpandFullscreen != null) {
             Surface(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp),
+                Modifier.align(Alignment.TopEnd).padding(6.dp),
                 color = Color(0xEEFFFFFF),
                 shape = RoundedCornerShape(20.dp),
             ) {
                 IconButton(onClick = onExpandFullscreen) {
-                    Icon(
-                        Icons.Filled.Fullscreen,
-                        contentDescription = "Expand map full screen",
-                        tint = Color(0xFF263238),
-                    )
+                    Icon(Icons.Filled.Fullscreen, "Expand map full screen", tint = Color(0xFF263238))
                 }
             }
         }

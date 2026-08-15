@@ -55,7 +55,7 @@ object MapHelpers {
         radiusMiles: Double,
         animate: Boolean = false,
     ) {
-        val r = radiusMiles.coerceIn(25.0, 1500.0)
+        val r = radiusMiles.coerceIn(25.0, 4000.0)
         val latDelta = r / 69.0
         val lonDelta = r / (69.0 * cos(Math.toRadians(lat)).coerceAtLeast(0.2))
         val box = BoundingBox(

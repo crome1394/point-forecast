@@ -68,7 +68,7 @@ class EarthquakeService(
         longitude: Double,
         focusRadiusMiles: Int = 250,
     ): Snapshot = withContext(Dispatchers.IO) {
-        val focusKm = (focusRadiusMiles.coerceIn(25, 1500) * KM_PER_MILE)
+        val focusKm = (focusRadiusMiles.coerceIn(25, 4000) * KM_PER_MILE)
         // Prefer the user focus radius first; expand only if that window is empty (quiet regions)
         val radii = buildList {
             add(focusKm)
@@ -102,7 +102,7 @@ class EarthquakeService(
         }
 
         // Keep table/map markers within the focus radius when we had to expand for “any activity”
-        val focusMiles = focusRadiusMiles.toDouble().coerceIn(25.0, 1500.0)
+        val focusMiles = focusRadiusMiles.toDouble().coerceIn(25.0, 4000.0)
         val recentInFocus = recentAll.filter { it.distanceMiles <= focusMiles }
         val recentForUi = if (recentInFocus.isNotEmpty()) recentInFocus else recentAll
 

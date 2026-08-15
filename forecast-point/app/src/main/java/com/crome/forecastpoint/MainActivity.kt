@@ -633,13 +633,21 @@ class MainActivity : ComponentActivity() {
                                     spaceWeatherForecastHorizonHours = spaceWeatherForecastHorizonHours,
                                     earthquakes = earthquakes,
                                     earthquakesLoading = earthquakesLoading,
-                                    onEnsureEarthquakes = {
-                                        viewModel.ensureEarthquakes(celestialLat, celestialLon)
+                                    onEnsureEarthquakes = { radiusMiles ->
+                                        viewModel.ensureEarthquakes(
+                                            celestialLat,
+                                            celestialLon,
+                                            focusRadiusMiles = radiusMiles,
+                                        )
                                     },
                                     severeWeather = severeWeather,
                                     severeWeatherLoading = severeWeatherLoading,
-                                    onEnsureSevereWeather = {
-                                        viewModel.ensureSevereWeather(celestialLat, celestialLon)
+                                    onEnsureSevereWeather = { radiusMiles ->
+                                        viewModel.ensureSevereWeather(
+                                            celestialLat,
+                                            celestialLon,
+                                            focusRadiusMiles = radiusMiles,
+                                        )
                                     },
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
                                 )

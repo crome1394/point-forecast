@@ -88,10 +88,10 @@ fun SunMoonScreen(
     spaceWeatherForecastHorizonHours: Int = 48,
     earthquakes: EarthquakeService.Snapshot? = null,
     earthquakesLoading: Boolean = false,
-    onEnsureEarthquakes: (() -> Unit)? = null,
+    onEnsureEarthquakes: ((radiusMiles: Int) -> Unit)? = null,
     severeWeather: SevereWeatherService.Snapshot? = null,
     severeWeatherLoading: Boolean = false,
-    onEnsureSevereWeather: (() -> Unit)? = null,
+    onEnsureSevereWeather: ((radiusMiles: Int) -> Unit)? = null,
     mapFocusRadiusMiles: Int = 250,
 ) {
     if (body == CelestialBody.SpaceWeather) {
@@ -104,30 +104,26 @@ fun SunMoonScreen(
         return
     }
     if (body == CelestialBody.Earthquakes) {
-        LaunchedEffect(latitude, longitude, mapFocusRadiusMiles) {
-            onEnsureEarthquakes?.invoke()
-        }
         EarthquakeSummaryScreen(
             latitude = latitude,
             longitude = longitude,
             locationName = locationName,
             snapshot = earthquakes,
             loading = earthquakesLoading,
-            mapFocusRadiusMiles = mapFocusRadiusMiles,
+            settingsDefaultRadiusMiles = mapFocusRadiusMiles,
+            onExploreRadius = { r -> onEnsureEarthquakes?.invoke(r) },
         )
         return
     }
     if (body == CelestialBody.Storms) {
-        LaunchedEffect(latitude, longitude, mapFocusRadiusMiles) {
-            onEnsureSevereWeather?.invoke()
-        }
         SevereWeatherSummaryScreen(
             latitude = latitude,
             longitude = longitude,
             locationName = locationName,
             snapshot = severeWeather,
             loading = severeWeatherLoading,
-            mapFocusRadiusMiles = mapFocusRadiusMiles,
+            settingsDefaultRadiusMiles = mapFocusRadiusMiles,
+            onExploreRadius = { r -> onEnsureSevereWeather?.invoke(r) },
         )
         return
     }

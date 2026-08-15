@@ -176,8 +176,9 @@ fun SettingsScreen(
                 modifier = Modifier.padding(bottom = 4.dp),
             )
             Text(
-                "Earthquake and tornado/hurricane maps zoom so about this distance " +
-                    "from the selected city is visible (default 250 miles).",
+                "Default distance for earthquake and tornado/hurricane maps, history lists, " +
+                    "and nearby storms (50–4000 miles). Hazard screens can temporarily explore " +
+                    "a different radius without changing this setting. Default: 250 miles.",
                 color = OnSurfaceMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(bottom = 8.dp),

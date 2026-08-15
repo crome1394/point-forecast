@@ -407,7 +407,11 @@ class PreferencesRepository(private val context: Context) {
         const val DEFAULT_SW_HORIZON_HOURS = 48
         const val DEFAULT_MAP_FOCUS_RADIUS_MILES = 250
         /** Hazard map focus radius options (miles from selected city). */
-        val MAP_FOCUS_RADIUS_OPTIONS = listOf(50, 100, 150, 250, 400, 500)
+        val MAP_FOCUS_RADIUS_OPTIONS = listOf(
+            50, 100, 150, 250, 400, 500, 750, 1000, 1500, 2000, 3000, 4000,
+        )
+        /** Quick chips for ad-hoc explore radius on hazard screens (not Settings). */
+        val MAP_FOCUS_RADIUS_CHIPS = listOf(100, 250, 500, 750, 1000, 2000, 4000)
         /** Look-ahead options for predicted geomagnetic activity. */
         val SW_HORIZON_OPTIONS = listOf(24, 48, 72)
         /** Selectable NOAA scale levels for Watch / Active cues. */
