@@ -19,16 +19,18 @@ U.S. National Weather Service **point forecasts** on Android—clear, offline-fr
 - **Alerts** when watches/warnings/advisories are active (optional auto-expand)
 - **Map** pick (GPS pin + selection pin), city search (city + state)
 - **Radar** link (weather.gov) from the app bar
-- **Sun / moon / space weather / earthquakes / tornado & hurricane** summaries (title-bar menu, drawer, body switcher tabs)
+- **Sun / moon / space weather / earthquakes / severe weather** summaries (title-bar menu, drawer, body switcher tabs)
+  - Hazard maps with **push-pin** markers; explore radius and history (1d–6m or custom date range)
+  - Earthquake magnitude filter; severe weather tropical strength / EF filters
 - **Home widget** with bundled NWS icons (works on CalyxOS)
-- **Settings** for layout, widget mode, hourly tabs, hamburger menu, map focus radius (hazard maps, quake/tornado history, nearby tropical cyclones), space weather cue thresholds
+- **Settings** for layout, widget mode, hourly tabs, hamburger menu, map focus radius (up to 4000 mi), hazard history default, space weather cue thresholds
 
 ## Download
 
 [**Releases**](https://github.com/crome1394/forecast-point/releases) — install the latest `PointForecast-*.apk`.
 
 ```bash
-adb install -r PointForecast-1.1.2.apk
+adb install -r PointForecast-1.1.3.apk
 ```
 
 ## Build
@@ -67,7 +69,7 @@ Signed store / F-Droid builds: see [RELEASE.md](RELEASE.md) and [CHANGELOG.md](C
 | Tides / water levels | NOAA CO-OPS (tides, subordinate offsets, Great Lakes); USGS NWIS stage (rivers/inland) |
 | Space weather (Kp / G/R/S) | NOAA SWPC |
 | Earthquakes | USGS Earthquake Hazards Program (FDSN) |
-| Tornado reports / tropical storms | NOAA SPC storm reports; NHC CurrentStorms; NWS CAP alerts |
+| Severe weather (tornadoes / tropical) | NOAA SPC storm reports + WCM archive; NHC CurrentStorms; NWS CAP alerts |
 | Air quality, UV, pressure | [Open-Meteo](https://open-meteo.com/) (optional extras) |
 | Search / map | OpenStreetMap Nominatim, osmdroid, CARTO |
 

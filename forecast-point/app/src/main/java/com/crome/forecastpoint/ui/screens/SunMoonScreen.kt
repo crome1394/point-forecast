@@ -88,11 +88,22 @@ fun SunMoonScreen(
     spaceWeatherForecastHorizonHours: Int = 48,
     earthquakes: EarthquakeService.Snapshot? = null,
     earthquakesLoading: Boolean = false,
-    onEnsureEarthquakes: (() -> Unit)? = null,
+    onEnsureEarthquakes: ((
+        radiusMiles: Int,
+        historyDays: Int,
+        historyStartMs: Long?,
+        historyEndMs: Long?,
+    ) -> Unit)? = null,
     severeWeather: SevereWeatherService.Snapshot? = null,
     severeWeatherLoading: Boolean = false,
-    onEnsureSevereWeather: (() -> Unit)? = null,
+    onEnsureSevereWeather: ((
+        radiusMiles: Int,
+        historyDays: Int,
+        historyStartMs: Long?,
+        historyEndMs: Long?,
+    ) -> Unit)? = null,
     mapFocusRadiusMiles: Int = 250,
+    hazardHistoryDays: Int = 7,
 ) {
     if (body == CelestialBody.SpaceWeather) {
         SpaceWeatherSummaryScreen(
@@ -104,30 +115,28 @@ fun SunMoonScreen(
         return
     }
     if (body == CelestialBody.Earthquakes) {
-        LaunchedEffect(latitude, longitude, mapFocusRadiusMiles) {
-            onEnsureEarthquakes?.invoke()
-        }
         EarthquakeSummaryScreen(
             latitude = latitude,
             longitude = longitude,
             locationName = locationName,
             snapshot = earthquakes,
             loading = earthquakesLoading,
-            mapFocusRadiusMiles = mapFocusRadiusMiles,
+            settingsDefaultRadiusMiles = mapFocusRadiusMiles,
+            settingsDefaultHistoryDays = hazardHistoryDays,
+            onExploreParams = { r, d, s, e -> onEnsureEarthquakes?.invoke(r, d, s, e) },
         )
         return
     }
     if (body == CelestialBody.Storms) {
-        LaunchedEffect(latitude, longitude, mapFocusRadiusMiles) {
-            onEnsureSevereWeather?.invoke()
-        }
         SevereWeatherSummaryScreen(
             latitude = latitude,
             longitude = longitude,
             locationName = locationName,
             snapshot = severeWeather,
             loading = severeWeatherLoading,
-            mapFocusRadiusMiles = mapFocusRadiusMiles,
+            settingsDefaultRadiusMiles = mapFocusRadiusMiles,
+            settingsDefaultHistoryDays = hazardHistoryDays,
+            onExploreParams = { r, d, s, e -> onEnsureSevereWeather?.invoke(r, d, s, e) },
         )
         return
     }

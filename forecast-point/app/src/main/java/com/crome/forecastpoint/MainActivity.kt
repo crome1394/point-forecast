@@ -155,6 +155,7 @@ class MainActivity : ComponentActivity() {
                 val severeWeather by viewModel.severeWeather.collectAsState()
                 val severeWeatherLoading by viewModel.severeWeatherLoading.collectAsState()
                 val mapFocusRadiusMiles by viewModel.mapFocusRadiusMiles.collectAsState()
+                val hazardHistoryDays by viewModel.hazardHistoryDays.collectAsState()
 
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -190,7 +191,7 @@ class MainActivity : ComponentActivity() {
                         CelestialBody.Moon -> "Moon"
                         CelestialBody.SpaceWeather -> "Space Weather"
                         CelestialBody.Earthquakes -> "Earthquakes"
-                        CelestialBody.Storms -> "Tornado / Hurricane"
+                        CelestialBody.Storms -> "Severe Weather"
                     }
                 }
 
@@ -588,6 +589,7 @@ class MainActivity : ComponentActivity() {
                                     hourlyTabConfig = hourlyTabConfig,
                                     drawerNavConfig = drawerNavConfig,
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
+                                    hazardHistoryDays = hazardHistoryDays,
                                     spaceWeatherWatchThreshold = spaceWeatherWatchThreshold,
                                     spaceWeatherActiveThreshold = spaceWeatherActiveThreshold,
                                     spaceWeatherForecastHorizonHours = spaceWeatherForecastHorizonHours,
@@ -606,6 +608,9 @@ class MainActivity : ComponentActivity() {
                                     onDrawerNavConfigChange = { viewModel.setDrawerNavConfig(it) },
                                     onMapFocusRadiusMilesChange = {
                                         viewModel.setMapFocusRadiusMiles(it)
+                                    },
+                                    onHazardHistoryDaysChange = {
+                                        viewModel.setHazardHistoryDays(it)
                                     },
                                     onSpaceWeatherWatchThresholdChange = {
                                         viewModel.setSpaceWeatherWatchThreshold(it)
@@ -633,15 +638,30 @@ class MainActivity : ComponentActivity() {
                                     spaceWeatherForecastHorizonHours = spaceWeatherForecastHorizonHours,
                                     earthquakes = earthquakes,
                                     earthquakesLoading = earthquakesLoading,
-                                    onEnsureEarthquakes = {
-                                        viewModel.ensureEarthquakes(celestialLat, celestialLon)
+                                    onEnsureEarthquakes = { radiusMiles, historyDays, startMs, endMs ->
+                                        viewModel.ensureEarthquakes(
+                                            celestialLat,
+                                            celestialLon,
+                                            focusRadiusMiles = radiusMiles,
+                                            historyDays = historyDays,
+                                            historyStartMs = startMs,
+                                            historyEndMs = endMs,
+                                        )
                                     },
                                     severeWeather = severeWeather,
                                     severeWeatherLoading = severeWeatherLoading,
-                                    onEnsureSevereWeather = {
-                                        viewModel.ensureSevereWeather(celestialLat, celestialLon)
+                                    onEnsureSevereWeather = { radiusMiles, historyDays, startMs, endMs ->
+                                        viewModel.ensureSevereWeather(
+                                            celestialLat,
+                                            celestialLon,
+                                            focusRadiusMiles = radiusMiles,
+                                            historyDays = historyDays,
+                                            historyStartMs = startMs,
+                                            historyEndMs = endMs,
+                                        )
                                     },
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
+                                    hazardHistoryDays = hazardHistoryDays,
                                 )
                             }
                         }
@@ -771,7 +791,7 @@ private fun SunMoonPickerMenu(
             )
             CelestialMenuPill(
                 icon = Icons.Filled.Thunderstorm,
-                label = "Tornado / Hurricane",
+                label = "Severe Weather",
                 tint = Color(0xFFFF7043),
                 onClick = { onPick(CelestialBody.Storms) },
             )
@@ -820,7 +840,7 @@ private fun CelestialBodyTitleTabs(
         )
         TitleBodyTab(
             icon = Icons.Filled.Thunderstorm,
-            contentDescription = "Tornado / Hurricane",
+            contentDescription = "Severe Weather",
             selected = selected == CelestialBody.Storms,
             tint = Color(0xFFFF7043),
             onClick = { onSelect(CelestialBody.Storms) },

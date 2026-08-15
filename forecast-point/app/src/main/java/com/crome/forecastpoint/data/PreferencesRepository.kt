@@ -63,8 +63,10 @@ class PreferencesRepository(private val context: Context) {
     private val keySwActiveThreshold = intPreferencesKey("sw_active_threshold")
     /** Hours ahead to consider predicted Kp/G for the title-bar cue. */
     private val keySwForecastHorizonHours = intPreferencesKey("sw_forecast_horizon_hours")
-    /** Hazard map focus radius (miles) for earthquake / tornado-hurricane maps. */
+    /** Hazard map focus radius (miles) for earthquake / severe weather maps. */
     private val keyMapFocusRadiusMiles = intPreferencesKey("map_focus_radius_miles")
+    /** Default look-back window (days) for earthquake / severe weather history lists. */
+    private val keyHazardHistoryDays = intPreferencesKey("hazard_history_days")
     /** JSON array of drawer nav item ids (hamburger menu order) — legacy. */
     private val keyDrawerNavOrder = stringPreferencesKey("drawer_nav_order_json")
     /** JSON array of [DrawerNavConfigItem] — order + visibility for hamburger items. */
@@ -118,7 +120,7 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.data.map { it[keyShowTitleSunMoon] ?: true }
 
     /**
-     * Default view radius (miles) for earthquake and tornado/hurricane summary maps
+     * Default view radius (miles) for earthquake and severe weather summary maps
      * (zoom so about this distance is visible from the selected city).
      */
     val mapFocusRadiusMiles: Flow<Int> =
@@ -126,6 +128,17 @@ class PreferencesRepository(private val context: Context) {
             val raw = prefs[keyMapFocusRadiusMiles] ?: DEFAULT_MAP_FOCUS_RADIUS_MILES
             MAP_FOCUS_RADIUS_OPTIONS.minByOrNull { kotlin.math.abs(it - raw) }
                 ?: DEFAULT_MAP_FOCUS_RADIUS_MILES
+        }
+
+    /**
+     * Default history look-back (days) for recent earthquakes and tornado reports.
+     * Hazard screens can temporarily use another window without changing this.
+     */
+    val hazardHistoryDays: Flow<Int> =
+        context.dataStore.data.map { prefs ->
+            val raw = prefs[keyHazardHistoryDays] ?: DEFAULT_HAZARD_HISTORY_DAYS
+            HAZARD_HISTORY_DAYS_OPTIONS.minByOrNull { kotlin.math.abs(it - raw) }
+                ?: DEFAULT_HAZARD_HISTORY_DAYS
         }
 
     /**
@@ -286,6 +299,12 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[keyMapFocusRadiusMiles] = chosen }
     }
 
+    suspend fun setHazardHistoryDays(days: Int) {
+        val chosen = HAZARD_HISTORY_DAYS_OPTIONS.minByOrNull { kotlin.math.abs(it - days) }
+            ?: DEFAULT_HAZARD_HISTORY_DAYS
+        context.dataStore.edit { it[keyHazardHistoryDays] = chosen }
+    }
+
     suspend fun setDrawerNavConfig(config: List<DrawerNavConfigItem>) {
         val normalized = normalizeDrawerNavConfig(config)
         context.dataStore.edit {
@@ -407,7 +426,49 @@ class PreferencesRepository(private val context: Context) {
         const val DEFAULT_SW_HORIZON_HOURS = 48
         const val DEFAULT_MAP_FOCUS_RADIUS_MILES = 250
         /** Hazard map focus radius options (miles from selected city). */
-        val MAP_FOCUS_RADIUS_OPTIONS = listOf(50, 100, 150, 250, 400, 500)
+        val MAP_FOCUS_RADIUS_OPTIONS = listOf(
+            50, 100, 150, 250, 400, 500, 750, 1000, 1500, 2000, 3000, 4000,
+        )
+        /** Quick chips for ad-hoc explore radius on hazard screens (not Settings). */
+        val MAP_FOCUS_RADIUS_CHIPS = listOf(100, 250, 500, 750, 1000, 2000, 4000)
+        /** Default look-back for recent quakes / severe-weather reports. */
+        const val DEFAULT_HAZARD_HISTORY_DAYS = 7
+        /**
+         * Stock history presets (days) for Settings + hazard-screen chips.
+         * Longer ranges use the on-screen **Custom** date picker (keeps default
+         * query sizes small).
+         */
+        val HAZARD_HISTORY_DAYS_OPTIONS = listOf(
+            1,    // 1 day
+            7,    // 7 days
+            30,   // 30 days
+            90,   // 3 months
+            180,  // 6 months
+        )
+        /** Same stock chips on hazard screens (plus a separate Custom pill). */
+        val HAZARD_HISTORY_DAYS_CHIPS = HAZARD_HISTORY_DAYS_OPTIONS
+
+        /** Human label for a history-window day count. */
+        fun historyDaysLabel(days: Int): String = when {
+            days <= 1 -> "1 day"
+            days == 7 -> "7 days"
+            days == 30 -> "30 days"
+            days in 85..95 -> "3 months"
+            days in 170..190 -> "6 months"
+            days < 180 -> "$days days"
+            days % 30 == 0 -> "${days / 30} months"
+            else -> "$days days"
+        }
+
+        fun historyDaysChipLabel(days: Int): String = when {
+            days <= 1 -> "1d"
+            days == 7 -> "7d"
+            days == 30 -> "30d"
+            days in 85..95 -> "3m"
+            days in 170..190 -> "6m"
+            days < 180 -> "${days}d"
+            else -> "${days}d"
+        }
         /** Look-ahead options for predicted geomagnetic activity. */
         val SW_HORIZON_OPTIONS = listOf(24, 48, 72)
         /** Selectable NOAA scale levels for Watch / Active cues. */
@@ -530,7 +591,7 @@ class PreferencesRepository(private val context: Context) {
             "Moon" -> "Moon"
             "SpaceWeather" -> "Space Weather"
             "Earthquakes" -> "Earthquakes"
-            "Storms" -> "Tornado / Hurricane"
+            "Storms" -> "Severe Weather"
             "AddCity" -> "Add City"
             else -> id
         }

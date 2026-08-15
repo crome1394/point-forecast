@@ -154,13 +154,12 @@ fun MapScreen(
     val mapView = remember {
         createMapView(context, initialLat, initialLon, initialZoom)
     }
-    // Red teardrop — chosen weather location (tap / search)
+    // Red push pin — chosen weather location (tap / search)
     val selectionMarker = remember {
         Marker(mapView).apply {
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             title = "Selected"
             id = "selection"
-            ContextCompat.getDrawable(context, R.drawable.ic_map_selection_pin)?.let { icon = it }
+            MapHelpers.applyPushPin(this, context, R.drawable.ic_map_selection_pin)
         }
     }
     // Blue GPS disk — device position only (persistent while map is open)

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Classic push pin: thin needle + red sphere (selected city). -->
+<!-- Classic push pin: thin needle + cyan sphere (tropical cyclones). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="36dp"
     android:height="52dp"
@@ -13,17 +13,17 @@
     <path
         android:fillColor="#E0E0E0"
         android:pathData="M17.2,16 L18.2,16 L18.2,45 L17.2,45 Z" />
-    <!-- Sphere shadow (slight offset under ball) -->
+    <!-- Sphere shadow -->
     <path
         android:fillColor="#80000000"
         android:pathData="M18,14.5 m-9.2,0 a9.2,9.2 0 1,0 18.4,0 a9.2,9.2 0 1,0 -18.4,0" />
-    <!-- Main red sphere -->
+    <!-- Main cyan sphere -->
     <path
-        android:fillColor="#E53935"
+        android:fillColor="#039BE5"
         android:pathData="M18,13 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0" />
     <!-- Sphere rim / depth -->
     <path
-        android:fillColor="#B71C1C"
+        android:fillColor="#01579B"
         android:pathData="M18,13 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0"
         android:fillAlpha="0.25" />
     <!-- Gloss highlight -->

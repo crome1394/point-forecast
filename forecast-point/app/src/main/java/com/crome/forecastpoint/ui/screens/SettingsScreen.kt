@@ -71,6 +71,7 @@ fun SettingsScreen(
     hourlyTabConfig: List<HourlyTabConfigItem>,
     drawerNavConfig: List<DrawerNavConfigItem>,
     mapFocusRadiusMiles: Int,
+    hazardHistoryDays: Int,
     spaceWeatherWatchThreshold: Int,
     spaceWeatherActiveThreshold: Int,
     spaceWeatherForecastHorizonHours: Int,
@@ -86,6 +87,7 @@ fun SettingsScreen(
     onHourlyTabConfigChange: (List<HourlyTabConfigItem>) -> Unit,
     onDrawerNavConfigChange: (List<DrawerNavConfigItem>) -> Unit,
     onMapFocusRadiusMilesChange: (Int) -> Unit,
+    onHazardHistoryDaysChange: (Int) -> Unit,
     onSpaceWeatherWatchThresholdChange: (Int) -> Unit,
     onSpaceWeatherActiveThresholdChange: (Int) -> Unit,
     onSpaceWeatherForecastHorizonHoursChange: (Int) -> Unit,
@@ -176,8 +178,9 @@ fun SettingsScreen(
                 modifier = Modifier.padding(bottom = 4.dp),
             )
             Text(
-                "Earthquake and tornado/hurricane maps zoom so about this distance " +
-                    "from the selected city is visible (default 250 miles).",
+                "Default distance for earthquake and severe weather maps, history lists, " +
+                    "and nearby storms (50–4000 miles). Hazard screens can temporarily explore " +
+                    "a different radius without changing this setting. Default: 250 miles.",
                 color = OnSurfaceMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -189,6 +192,29 @@ fun SettingsScreen(
                     it to mapFocusRadiusLabel(it)
                 },
                 onSelect = onMapFocusRadiusMilesChange,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Hazard history window",
+                color = Color.White,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            Text(
+                "Default look-back for earthquake and severe weather reports " +
+                    "(1 day, 7 days, 30 days, 3 months, or 6 months). Longer ranges use " +
+                    "Custom on the hazard screens (calendar date picker). Default: 7 days.",
+                color = OnSurfaceMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            SettingsDropdown(
+                label = "History window",
+                valueLabel = hazardHistoryDaysLabel(hazardHistoryDays),
+                options = PreferencesRepository.HAZARD_HISTORY_DAYS_OPTIONS.map {
+                    it to hazardHistoryDaysLabel(it)
+                },
+                onSelect = onHazardHistoryDaysChange,
             )
         }
 
@@ -700,3 +726,12 @@ private fun mapFocusRadiusLabel(miles: Int): String =
     } else {
         "$miles miles"
     }
+
+private fun hazardHistoryDaysLabel(days: Int): String {
+    val base = PreferencesRepository.historyDaysLabel(days)
+    return if (days == PreferencesRepository.DEFAULT_HAZARD_HISTORY_DAYS) {
+        "$base (default)"
+    } else {
+        base
+    }
+}

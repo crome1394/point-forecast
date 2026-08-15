@@ -84,7 +84,7 @@ fun AboutScreen() {
                 "• Forecasts & alerts: National Weather Service (weather.gov / api.weather.gov)\n" +
                 "• Tides / water levels: NOAA CO-OPS (coastal tides, Great Lakes) + USGS NWIS stage (rivers & inland lakes)\n" +
                 "• Earthquakes: USGS Earthquake Hazards Program (FDSN)\n" +
-                "• Tornado / hurricane: NHC active storms, SPC reports, NWS alerts\n" +
+                "• Severe weather: NHC active storms, SPC tornado reports, NWS alerts\n" +
                 "• Space weather: NOAA SWPC\n" +
                 "• Air quality / UV / pressure: Open-Meteo\n" +
                 "• Map tiles: OpenStreetMap / CARTO (via osmdroid)\n" +
@@ -102,6 +102,14 @@ fun AboutScreen() {
             color = OnSurfaceMuted,
             modifier = Modifier.padding(top = 16.dp),
             fontSize = 13.sp,
+        )
+        Text(
+            "Special thanks to my dear friend Javier Velasquez for his ideas and help " +
+                "troubleshooting the UX, and the QA.",
+            color = Color.White,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
