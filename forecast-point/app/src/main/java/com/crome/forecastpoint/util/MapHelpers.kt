@@ -1,19 +1,38 @@
 package com.crome.forecastpoint.util
 
+import android.content.Context
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.DrawableRes
+import androidx.core.content.ContextCompat
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.max
 
 /**
- * Shared osmdroid helpers: single-finger pan in scroll parents, radius-based zoom.
+ * Shared osmdroid helpers: single-finger pan in scroll parents, radius-based zoom,
+ * classic push-pin marker icons.
  */
 object MapHelpers {
+
+    /**
+     * Apply a push-pin drawable (sphere + thin needle). Anchor is the tip of the pin.
+     */
+    fun applyPushPin(
+        marker: Marker,
+        context: Context,
+        @DrawableRes drawableRes: Int,
+    ) {
+        ContextCompat.getDrawable(context, drawableRes)?.let { d ->
+            marker.icon = d
+            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        }
+    }
 
     /**
      * Allow one-finger pan/zoom on a map embedded in a vertical scroll parent

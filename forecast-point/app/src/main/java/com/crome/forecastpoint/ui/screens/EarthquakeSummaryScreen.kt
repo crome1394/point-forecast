@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.crome.forecastpoint.R
 import com.crome.forecastpoint.data.EarthquakeService
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
@@ -103,13 +104,26 @@ fun EarthquakeSummaryScreen(
     snapshot: EarthquakeService.Snapshot?,
     loading: Boolean,
     settingsDefaultRadiusMiles: Int = PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
-    onExploreRadius: (Int) -> Unit = {},
+    settingsDefaultHistoryDays: Int = PreferencesRepository.DEFAULT_HAZARD_HISTORY_DAYS,
+    onExploreParams: (
+        radiusMiles: Int,
+        historyDays: Int,
+        historyStartMs: Long?,
+        historyEndMs: Long?,
+    ) -> Unit = { _, _, _, _ -> },
 ) {
     var aboutExpanded by remember { mutableStateOf(false) }
+    var settingsExpanded by remember { mutableStateOf(false) }
     var mapFullscreen by remember { mutableStateOf(false) }
     var exploreRadius by remember(settingsDefaultRadiusMiles) {
         mutableIntStateOf(settingsDefaultRadiusMiles)
     }
+    var historyDays by remember(settingsDefaultHistoryDays) {
+        mutableIntStateOf(settingsDefaultHistoryDays)
+    }
+    var customRangeActive by remember { mutableStateOf(false) }
+    var customStartMs by remember { mutableStateOf<Long?>(null) }
+    var customEndMs by remember { mutableStateOf<Long?>(null) }
     var minMagnitude by remember { mutableFloatStateOf(1.0f) }
     val uriHandler = LocalUriHandler.current
     val timeFmt = remember {
@@ -118,28 +132,40 @@ fun EarthquakeSummaryScreen(
         }
     }
 
-    LaunchedEffect(latitude, longitude, exploreRadius) {
-        onExploreRadius(exploreRadius)
+    LaunchedEffect(latitude, longitude, exploreRadius, historyDays, customRangeActive, customStartMs, customEndMs) {
+        if (customRangeActive && customStartMs != null && customEndMs != null) {
+            val days = (
+                ((customEndMs!! - customStartMs!!) / (24L * 3600L * 1000L)).toInt()
+                ).coerceAtLeast(1)
+            onExploreParams(exploreRadius, days, customStartMs, customEndMs)
+        } else {
+            onExploreParams(exploreRadius, historyDays, null, null)
+        }
     }
 
-    val filteredRecent = remember(snapshot, minMagnitude) {
+    val filteredReports = remember(snapshot, minMagnitude) {
         snapshot?.recentAll
             ?.filter { (it.magnitude ?: 0.0) >= minMagnitude.toDouble() }
-            ?.sortedBy { it.distanceMiles }
+            ?.sortedByDescending { it.timeEpochMs }
             .orEmpty()
     }
-    val filteredHistorical = remember(snapshot, minMagnitude) {
-        snapshot?.historical
-            ?.filter { (it.magnitude ?: 0.0) >= minMagnitude.toDouble().coerceAtLeast(4.0) }
-            ?.sortedByDescending { it.magnitude ?: 0.0 }
-            .orEmpty()
-            .ifEmpty {
-                // If min mag slider is above 4, filter historical; if below 4, show all historical M4+
-                snapshot?.historical
-                    ?.filter { (it.magnitude ?: 0.0) >= minMagnitude.toDouble() }
-                    ?.sortedByDescending { it.magnitude ?: 0.0 }
-                    .orEmpty()
-            }
+
+    val magLabel = "M${String.format(Locale.US, "%.1f", minMagnitude)}+"
+    val historySummary = if (customRangeActive && customStartMs != null && customEndMs != null) {
+        val fmt = SimpleDateFormat("MMM d", Locale.US)
+        "${fmt.format(java.util.Date(customStartMs!!))}–${fmt.format(java.util.Date(customEndMs!!))}"
+    } else {
+        formatHistoryDays(historyDays)
+    }
+    val settingsSummary = "$historySummary · $exploreRadius mi · $magLabel"
+
+    fun resetHazardSettings() {
+        exploreRadius = settingsDefaultRadiusMiles
+        historyDays = settingsDefaultHistoryDays
+        customRangeActive = false
+        customStartMs = null
+        customEndMs = null
+        minMagnitude = 1.0f
     }
 
     Column(
@@ -156,31 +182,22 @@ fun EarthquakeSummaryScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
         Text(
-            "Near ${locationName ?: "selected location"} · map + regional list",
+            "Earthquake context for ${locationName ?: "selected location"}",
             color = OnSurfaceMuted,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        HazardExploreRadiusCard(
-            exploreRadiusMiles = exploreRadius,
-            settingsDefaultMiles = settingsDefaultRadiusMiles,
-            onRadiusChange = { exploreRadius = it },
-            accent = QuakeAccent,
-            title = "Explore distance",
-            subtitle = "Look around this city — temporary, not Settings",
-        )
-
-        HazardFilterSliderCard(
-            title = "Minimum magnitude",
-            valueLabel = "M${String.format(Locale.US, "%.1f", minMagnitude)}+",
-            value = minMagnitude,
-            valueRange = 1.0f..6.0f,
-            steps = 9, // 0.5 steps: 1.0, 1.5, … 6.0
-            accent = QuakeAccent,
-            onValueChange = { minMagnitude = (it * 2).roundToInt() / 2f },
-            help = "Hide smaller quakes (magnitude = strength on the Richter-style scale)",
-        )
+        if (loading) {
+            HazardLoadingBanner(
+                message = if (snapshot == null) {
+                    "Loading earthquakes…"
+                } else {
+                    "Updating earthquakes…"
+                },
+                accent = QuakeAccent,
+            )
+        }
 
         if (loading && snapshot == null) {
             CircularProgressIndicator(
@@ -190,7 +207,7 @@ fun EarthquakeSummaryScreen(
                 color = QuakeAccent,
             )
             Text(
-                "Loading earthquakes…",
+                "Fetching USGS catalog…",
                 color = OnSurfaceMuted,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
@@ -203,6 +220,7 @@ fun EarthquakeSummaryScreen(
             Text(err, color = Color(0xFFEF9A9A), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
         }
 
+        // Map first (same order as severe weather)
         Surface(
             Modifier
                 .fillMaxWidth()
@@ -214,8 +232,8 @@ fun EarthquakeSummaryScreen(
             EarthquakeMap(
                 centerLat = latitude,
                 centerLon = longitude,
-                recent = filteredRecent.take(40),
-                historical = filteredHistorical.take(12),
+                recent = filteredReports.take(50),
+                historical = emptyList(),
                 focusRadiusMiles = exploreRadius,
                 onExpandFullscreen = { mapFullscreen = true },
                 modifier = Modifier.fillMaxSize(),
@@ -231,8 +249,8 @@ fun EarthquakeSummaryScreen(
                     EarthquakeMap(
                         centerLat = latitude,
                         centerLon = longitude,
-                        recent = filteredRecent.take(40),
-                        historical = filteredHistorical.take(12),
+                        recent = filteredReports.take(50),
+                        historical = emptyList(),
                         focusRadiusMiles = exploreRadius,
                         onExpandFullscreen = null,
                         modifier = Modifier.fillMaxSize(),
@@ -247,34 +265,79 @@ fun EarthquakeSummaryScreen(
             }
         }
 
+        // Collapsible Settings (explore radius, history, magnitude)
+        HazardScreenSettingsSection(
+            accent = QuakeAccent,
+            expanded = settingsExpanded,
+            onExpandedChange = { settingsExpanded = it },
+            summary = settingsSummary,
+            onReset = { resetHazardSettings() },
+        ) {
+            HazardExploreRadiusCard(
+                exploreRadiusMiles = exploreRadius,
+                settingsDefaultMiles = settingsDefaultRadiusMiles,
+                onRadiusChange = { exploreRadius = it },
+                accent = QuakeAccent,
+                title = "Explore distance",
+                subtitle = "Look around this city — temporary, not app Settings",
+                compact = true,
+            )
+            HazardHistoryDaysCard(
+                historyDays = historyDays,
+                settingsDefaultDays = settingsDefaultHistoryDays,
+                onPresetDaysChange = {
+                    customRangeActive = false
+                    customStartMs = null
+                    customEndMs = null
+                    historyDays = it
+                },
+                onCustomRangeChange = { start, end ->
+                    customRangeActive = true
+                    customStartMs = start
+                    customEndMs = end
+                    historyDays = (
+                        ((end - start) / (24L * 3600L * 1000L)).toInt()
+                        ).coerceAtLeast(1)
+                },
+                accent = Color(0xFF90CAF9),
+                title = "History window",
+                subtitle = "1d–6m stock · Custom for a calendar date range",
+                compact = true,
+                customRangeActive = customRangeActive,
+                customStartMs = customStartMs,
+                customEndMs = customEndMs,
+            )
+            HazardFilterSliderCard(
+                title = "Minimum magnitude",
+                valueLabel = magLabel,
+                value = minMagnitude.coerceIn(1.0f, 6.0f),
+                valueRange = 1.0f..6.0f,
+                steps = 9,
+                accent = QuakeAccent,
+                onValueChange = { minMagnitude = (it * 2).roundToInt() / 2f },
+                help = "Hide smaller quakes (M = strength / magnitude)",
+                compact = true,
+            )
+        }
+
         Text(
             snapshot?.querySummary
-                ?: "Showing events within $exploreRadius mi · min M${String.format(Locale.US, "%.1f", minMagnitude)}",
+                ?: "Within $exploreRadius mi · $historySummary · $magLabel",
             color = OnSurfaceMuted,
             fontSize = 11.sp,
             lineHeight = 14.sp,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
+        // Single reports list (history window + magnitude filter)
         QuakeSection(
-            title = "Recent (30 days)",
-            subtitle = "M${String.format(Locale.US, "%.1f", minMagnitude)}+ within $exploreRadius mi · nearest first",
-            quakes = filteredRecent,
+            title = "Earthquake reports",
+            subtitle = "USGS · $historySummary · within $exploreRadius mi · $magLabel · newest first",
+            quakes = filteredReports,
             timeFmt = timeFmt,
-            emptyMessage = "No recent quakes at this magnitude within $exploreRadius mi.",
-            onOpen = { url -> uriHandler.openUri(url) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        QuakeSection(
-            title = "Historical (10 years)",
-            subtitle = "Larger past events within $exploreRadius mi · strongest first",
-            quakes = filteredHistorical,
-            timeFmt = timeFmt,
-            emptyMessage = "No historical events at this magnitude within $exploreRadius mi.",
+            emptyMessage = "No quakes at this magnitude within $exploreRadius mi for $historySummary.",
             onOpen = { url -> uriHandler.openUri(url) },
         )
 
@@ -291,7 +354,7 @@ fun EarthquakeSummaryScreen(
             Column(Modifier.padding(16.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "About earthquakes",
+                        "About earthquake data",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
@@ -307,21 +370,21 @@ fun EarthquakeSummaryScreen(
                     Text(
                         "Data source\n" +
                             "U.S. Geological Survey (USGS) Earthquake Hazards Program — the same " +
-                            "public catalog used on earthquake.usgs.gov.\n\n" +
+                            "public catalog used on earthquake.usgs.gov. Modern FDSN coverage is " +
+                            "multi-decade (this app offers history windows up to 10 years).\n\n" +
+                            "Screen layout\n" +
+                            "• Earthquake reports — one list for your history window and filters.\n" +
+                            "  Long windows raise the catalog minimum magnitude (e.g. ~M4 for 10 years) " +
+                            "and sample across time so results are not only last month’s tiny events.\n\n" +
                             "Terms\n" +
                             "• Magnitude (M) — how strong the quake was (e.g. M2.5 is small; M6 is " +
-                            "major). Sometimes called the Richter-style scale; modern catalogs use " +
-                            "moment magnitude.\n" +
-                            "• Depth (km) — how deep the quake was, in kilometers below the surface.\n" +
-                            "• FDSN — Federation of Digital Seismograph Networks; the open standard " +
-                            "API USGS uses for event queries.\n" +
-                            "• mi — miles from your selected city (straight-line distance).\n\n" +
-                            "Explore distance\n" +
-                            "The chips and slider change only this screen’s temporary radius. " +
-                            "Your Settings → Map focus radius default is unchanged.\n\n" +
-                            "Why lists differ from other apps\n" +
-                            "Many apps hide small quakes (below M2.5). California often has many " +
-                            "small events; New York may need a larger distance to show anything. " +
+                            "major). Modern catalogs use moment magnitude.\n" +
+                            "• Depth (km) — kilometers below the surface.\n" +
+                            "• FDSN — Federation of Digital Seismograph Networks; USGS query API.\n" +
+                            "• mi — miles from your selected city (straight-line).\n\n" +
+                            "Settings on this screen\n" +
+                            "Explore distance, history window, and magnitude filters are temporary. " +
+                            "They do not change Settings → Map focus radius or Hazard history defaults.\n\n" +
                             "Tap a row for the official USGS event page.",
                         color = Color(0xFFCFD8DC),
                         fontSize = 13.sp,
@@ -434,20 +497,22 @@ private fun EarthquakeMap(
 
     LaunchedEffect(centerLat, centerLon, recent, historical, focusRadiusMiles) {
         mapView.overlays.removeAll { it is Marker }
+        // Selected city: red push pin
         mapView.overlays.add(
             Marker(mapView).apply {
                 position = GeoPoint(centerLat, centerLon)
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 title = "Selected location"
+                MapHelpers.applyPushPin(this, context, R.drawable.ic_map_selection_pin)
             },
         )
+        // Reports: green push pins
         recent.forEach { q ->
             mapView.overlays.add(
                 Marker(mapView).apply {
                     position = GeoPoint(q.latitude, q.longitude)
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     title = "M${q.magnitude} · ${q.place}"
-                    snippet = "Recent"
+                    snippet = "Earthquake report"
+                    MapHelpers.applyPushPin(this, context, R.drawable.ic_map_report_pin)
                 },
             )
         }
@@ -455,9 +520,9 @@ private fun EarthquakeMap(
             mapView.overlays.add(
                 Marker(mapView).apply {
                     position = GeoPoint(q.latitude, q.longitude)
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     title = "M${q.magnitude} · ${q.place}"
                     snippet = "Historical"
+                    MapHelpers.applyPushPin(this, context, R.drawable.ic_map_report_pin)
                 },
             )
         }
@@ -484,9 +549,9 @@ private fun EarthquakeMap(
                 Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Place, null, tint = PrimaryBlue, modifier = Modifier.size(14.dp))
+                Icon(Icons.Filled.Place, null, tint = Color(0xFFE53935), modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Focus $focusRadiusMiles mi · one-finger pan", color = Color(0xFF263238), fontSize = 11.sp)
+                Text("Red pin = city · green = reports · $focusRadiusMiles mi", color = Color(0xFF263238), fontSize = 11.sp)
             }
         }
         if (onExpandFullscreen != null) {

@@ -7,14 +7,30 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.3] — 2026-08-15
+
 ### Added
 
-- Hazard screens: **ad-hoc explore distance** chips + slider (does not change Settings default); up to **4000 mi**
-- Earthquake screen: **minimum magnitude** slider
-- Tornado / Hurricane screen: **tropical strength** (knots) and **tornado EF category** sliders
-- Settings map focus radius options extended through **4000 miles**
-- About screen thanks to Javier Velasquez for UX ideas, troubleshooting, and QA
-- Clearer plain-language legends on earthquake and storm About sections (acronyms expanded)
+- Hazard screens: collapsible **Settings** under the map (explore radius, history, filters) with **Reset** and **Collapse** footers
+- Hazard **explore distance** (temporary; does not change Settings default) up to **4000 mi**
+- Hazard **history window**: stock **1d / 7d / 30d / 3m / 6m** plus **Custom** calendar date-range picker
+- Settings **map focus radius** options through **4000 miles**; **hazard history** default (1d–6m)
+- Earthquake screen: **minimum magnitude** slider; single **Earthquake reports** list (newest first)
+- Severe Weather screen: **tropical strength** and **tornado EF** sliders; **Severe weather reports** with tap-through to SPC daily pages
+- Loading banners while hazard APIs refresh
+- Classic **push-pin** map markers (red = city, green = reports, cyan = tropical storms)
+- About screen thanks to **Javier Velasquez** for UX ideas, troubleshooting, and QA
+- Plain-language **About** legends on earthquake and severe weather screens (acronyms expanded)
+
+### Changed
+
+- Renamed **Tornado / Hurricane** to **Severe Weather** (drawer, title bar, menus)
+- Long severe-weather history uses SPC **WCM 1950–present** archive (yearly files from 2008+) when the window exceeds 30 days
+- History chips auto-scroll so the selected pill stays visible
+
+### Fixed
+
+- Long history windows no longer stuck on only the newest N events (time-spanning selection + adaptive catalog min magnitude for USGS)
 
 ## [1.1.2] — 2026-08-14
 

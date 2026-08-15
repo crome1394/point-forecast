@@ -88,11 +88,22 @@ fun SunMoonScreen(
     spaceWeatherForecastHorizonHours: Int = 48,
     earthquakes: EarthquakeService.Snapshot? = null,
     earthquakesLoading: Boolean = false,
-    onEnsureEarthquakes: ((radiusMiles: Int) -> Unit)? = null,
+    onEnsureEarthquakes: ((
+        radiusMiles: Int,
+        historyDays: Int,
+        historyStartMs: Long?,
+        historyEndMs: Long?,
+    ) -> Unit)? = null,
     severeWeather: SevereWeatherService.Snapshot? = null,
     severeWeatherLoading: Boolean = false,
-    onEnsureSevereWeather: ((radiusMiles: Int) -> Unit)? = null,
+    onEnsureSevereWeather: ((
+        radiusMiles: Int,
+        historyDays: Int,
+        historyStartMs: Long?,
+        historyEndMs: Long?,
+    ) -> Unit)? = null,
     mapFocusRadiusMiles: Int = 250,
+    hazardHistoryDays: Int = 7,
 ) {
     if (body == CelestialBody.SpaceWeather) {
         SpaceWeatherSummaryScreen(
@@ -111,7 +122,8 @@ fun SunMoonScreen(
             snapshot = earthquakes,
             loading = earthquakesLoading,
             settingsDefaultRadiusMiles = mapFocusRadiusMiles,
-            onExploreRadius = { r -> onEnsureEarthquakes?.invoke(r) },
+            settingsDefaultHistoryDays = hazardHistoryDays,
+            onExploreParams = { r, d, s, e -> onEnsureEarthquakes?.invoke(r, d, s, e) },
         )
         return
     }
@@ -123,7 +135,8 @@ fun SunMoonScreen(
             snapshot = severeWeather,
             loading = severeWeatherLoading,
             settingsDefaultRadiusMiles = mapFocusRadiusMiles,
-            onExploreRadius = { r -> onEnsureSevereWeather?.invoke(r) },
+            settingsDefaultHistoryDays = hazardHistoryDays,
+            onExploreParams = { r, d, s, e -> onEnsureSevereWeather?.invoke(r, d, s, e) },
         )
         return
     }

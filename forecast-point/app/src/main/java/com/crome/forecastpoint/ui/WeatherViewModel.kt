@@ -70,6 +70,11 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         share,
         PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
     )
+    val hazardHistoryDays = prefs.hazardHistoryDays.stateIn(
+        viewModelScope,
+        share,
+        PreferencesRepository.DEFAULT_HAZARD_HISTORY_DAYS,
+    )
     val spaceWeatherWatchThreshold =
         prefs.spaceWeatherWatchThreshold.stateIn(
             viewModelScope,
@@ -151,25 +156,41 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Load USGS quakes around a point.
      * @param focusRadiusMiles optional ad-hoc radius (does not change Settings default).
+     * @param historyDays optional ad-hoc look-back when custom range is null.
+     * @param historyStartMs / [historyEndMs] optional custom date range.
      */
     fun ensureEarthquakes(
         latitude: Double,
         longitude: Double,
         focusRadiusMiles: Int? = null,
+        historyDays: Int? = null,
+        historyStartMs: Long? = null,
+        historyEndMs: Long? = null,
     ) {
         val radius = focusRadiusMiles ?: mapFocusRadiusMiles.value
+        val days = historyDays ?: hazardHistoryDays.value
         val current = _earthquakes.value
+        val rangeMatches = if (historyStartMs != null && historyEndMs != null) {
+            current != null &&
+                current.historyStartMs == historyStartMs &&
+                current.historyEndMs == historyEndMs
+        } else {
+            current != null &&
+                current.historyDays == days &&
+                System.currentTimeMillis() - current.historyEndMs < 15 * 60 * 1000L
+        }
         if (current != null &&
             kotlin.math.abs(current.latitude - latitude) < 0.05 &&
             kotlin.math.abs(current.longitude - longitude) < 0.05 &&
             kotlin.math.abs(current.radiusKm - radius * 1.609344) < 5.0 &&
+            rangeMatches &&
             System.currentTimeMillis() - current.updatedAtEpochMs < 15 * 60 * 1000L
         ) {
             return
         }
         earthquakeJob?.cancel()
         earthquakeJob = viewModelScope.launch {
-            refreshEarthquakes(latitude, longitude, radius)
+            refreshEarthquakes(latitude, longitude, radius, days, historyStartMs, historyEndMs)
         }
     }
 
@@ -177,6 +198,9 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         latitude: Double,
         longitude: Double,
         focusRadiusMiles: Int = mapFocusRadiusMiles.value,
+        historyDays: Int = hazardHistoryDays.value,
+        historyStartMs: Long? = null,
+        historyEndMs: Long? = null,
     ) {
         _earthquakesLoading.value = true
         runCatching {
@@ -184,12 +208,18 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                 latitude,
                 longitude,
                 focusRadiusMiles = focusRadiusMiles,
+                historyDays = historyDays,
+                historyStartMs = historyStartMs,
+                historyEndMs = historyEndMs,
             )
         }.onFailure {
             _earthquakes.value = EarthquakeService.Snapshot(
                 latitude = latitude,
                 longitude = longitude,
                 radiusKm = 0.0,
+                historyDays = historyDays,
+                historyStartMs = historyStartMs ?: 0L,
+                historyEndMs = historyEndMs ?: 0L,
                 recentAll = emptyList(),
                 recentNotable = emptyList(),
                 historical = emptyList(),
@@ -201,19 +231,32 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Load tornado/hurricane context.
-     * @param focusRadiusMiles optional ad-hoc radius (does not change Settings default).
+     * Load severe weather context (tropical cyclones, tornado reports, local alerts).
      */
     fun ensureSevereWeather(
         latitude: Double,
         longitude: Double,
         focusRadiusMiles: Int? = null,
+        historyDays: Int? = null,
+        historyStartMs: Long? = null,
+        historyEndMs: Long? = null,
     ) {
         val radius = focusRadiusMiles ?: mapFocusRadiusMiles.value
+        val days = historyDays ?: hazardHistoryDays.value
         val current = _severeWeather.value
+        val rangeMatches = if (historyStartMs != null && historyEndMs != null) {
+            current != null &&
+                current.historyStartMs == historyStartMs &&
+                current.historyEndMs == historyEndMs
+        } else {
+            current != null &&
+                current.historyDays == days &&
+                System.currentTimeMillis() - current.historyEndMs < 10 * 60 * 1000L
+        }
         if (current != null &&
             kotlin.math.abs(current.latitude - latitude) < 0.05 &&
             kotlin.math.abs(current.longitude - longitude) < 0.05 &&
+            rangeMatches &&
             System.currentTimeMillis() - current.updatedAtEpochMs < 10 * 60 * 1000L &&
             current.querySummary.contains("${radius} mi")
         ) {
@@ -221,7 +264,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         }
         severeWeatherJob?.cancel()
         severeWeatherJob = viewModelScope.launch {
-            refreshSevereWeather(latitude, longitude, radius)
+            refreshSevereWeather(latitude, longitude, radius, days, historyStartMs, historyEndMs)
         }
     }
 
@@ -229,6 +272,9 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         latitude: Double,
         longitude: Double,
         focusRadiusMiles: Int = mapFocusRadiusMiles.value,
+        historyDays: Int = hazardHistoryDays.value,
+        historyStartMs: Long? = null,
+        historyEndMs: Long? = null,
     ) {
         _severeWeatherLoading.value = true
         runCatching {
@@ -236,6 +282,9 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                 latitude,
                 longitude,
                 focusRadiusMiles = focusRadiusMiles,
+                historyDays = historyDays,
+                historyStartMs = historyStartMs,
+                historyEndMs = historyEndMs,
             )
         }.onFailure {
             _severeWeather.value = SevereWeatherService.Snapshot(
@@ -244,6 +293,9 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                 tropicalStorms = emptyList(),
                 tornadoReports = emptyList(),
                 localAlerts = emptyList(),
+                historyDays = historyDays,
+                historyStartMs = historyStartMs ?: 0L,
+                historyEndMs = historyEndMs ?: 0L,
                 updatedAtEpochMs = System.currentTimeMillis(),
                 error = it.message ?: "Failed to load severe weather",
             )
@@ -450,6 +502,10 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setMapFocusRadiusMiles(miles: Int) {
         viewModelScope.launch { prefs.setMapFocusRadiusMiles(miles) }
+    }
+
+    fun setHazardHistoryDays(days: Int) {
+        viewModelScope.launch { prefs.setHazardHistoryDays(days) }
     }
 
     fun setSpaceWeatherWatchThreshold(level: Int) {
