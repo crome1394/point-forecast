@@ -3,7 +3,9 @@ package com.crome.forecastpoint.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -14,7 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
@@ -41,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -250,12 +255,13 @@ fun SettingsScreen(
             Text(
                 "Toggle which tables appear on Hourly. Long-press and drag (or use ↑↓) to " +
                     "change order — the top enabled tab is first when you open Hourly. " +
-                    "Tides / water level uses NOAA CO-OPS (coastal tides or Great Lakes levels).",
+                    "Colors mark the data source; disabled tabs skip that network traffic on refresh.",
                 color = OnSurfaceMuted,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
-                modifier = Modifier.padding(bottom = 4.dp),
+                modifier = Modifier.padding(bottom = 6.dp),
             )
+            HourlyTabSourceLegend()
             HourlyTabConfigEditor(
                 config = hourlyTabConfig,
                 onConfigChange = onHourlyTabConfigChange,
@@ -517,8 +523,87 @@ private fun DrawerNavConfigEditor(
     }
 }
 
+/** Visual style for an Hourly tab’s upstream data source. */
+private data class HourlyTabSourceStyle(
+    val accent: Color,
+    val shortLabel: String,
+    val legendLabel: String,
+)
+
+private fun hourlyTabSourceStyle(tabId: String): HourlyTabSourceStyle = when (tabId) {
+    "Temperature", "Precipitation", "Wind", "Conditions" -> HourlyTabSourceStyle(
+        accent = Color(0xFF64B5F6), // NWS blue
+        shortLabel = "NWS",
+        legendLabel = "NWS forecast",
+    )
+    "Tides" -> HourlyTabSourceStyle(
+        accent = Color(0xFF4DB6AC), // CO-OPS teal
+        shortLabel = "CO-OPS",
+        legendLabel = "NOAA CO-OPS tides / water",
+    )
+    "Visibility", "Pressure", "UvIndex" -> HourlyTabSourceStyle(
+        accent = Color(0xFFFFB74D), // Open-Meteo amber
+        shortLabel = "Open-Meteo",
+        legendLabel = "Open-Meteo weather",
+    )
+    "AirQuality" -> HourlyTabSourceStyle(
+        accent = Color(0xFF81C784), // AQ green
+        shortLabel = "Open-Meteo AQ",
+        legendLabel = "Open-Meteo air quality",
+    )
+    "SpaceWeather" -> HourlyTabSourceStyle(
+        accent = Color(0xFFCE93D8), // SWPC purple
+        shortLabel = "SWPC",
+        legendLabel = "NOAA SWPC space weather",
+    )
+    else -> HourlyTabSourceStyle(
+        accent = OnSurfaceMuted,
+        shortLabel = "Other",
+        legendLabel = "Other",
+    )
+}
+
+@Composable
+private fun HourlyTabSourceLegend() {
+    val styles = remember {
+        listOf(
+            hourlyTabSourceStyle("Temperature"),
+            hourlyTabSourceStyle("Tides"),
+            hourlyTabSourceStyle("Visibility"),
+            hourlyTabSourceStyle("AirQuality"),
+            hourlyTabSourceStyle("SpaceWeather"),
+        )
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        styles.forEach { style ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(width = 10.dp, height = 10.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(style.accent),
+                )
+                Text(
+                    text = style.legendLabel,
+                    color = OnSurfaceMuted,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+    }
+}
+
 /**
  * Combined enable/disable + long-press drag reorder for hourly tabs.
+ * Rows are color-coded by network data source.
  */
 @Composable
 private fun HourlyTabConfigEditor(
@@ -559,6 +644,8 @@ private fun HourlyTabConfigEditor(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEachIndexed { index, item ->
             val isDragging = index == draggingIndex
+            val source = hourlyTabSourceStyle(item.id)
+            val accent = if (item.enabled) source.accent else source.accent.copy(alpha = 0.35f)
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -569,12 +656,18 @@ private fun HourlyTabConfigEditor(
                             y = if (isDragging) dragOffsetY.roundToInt() else 0,
                         )
                     }
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
                         when {
                             isDragging -> Color(0xFF37474F)
                             !item.enabled -> Color(0xFF1A2226)
                             else -> SurfaceDark
                         },
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = accent.copy(alpha = if (item.enabled) 0.45f else 0.2f),
+                        shape = RoundedCornerShape(8.dp),
                     )
                     .pointerInput(index, items) {
                         detectDragGesturesAfterLongPress(
@@ -611,23 +704,41 @@ private fun HourlyTabConfigEditor(
                             },
                         )
                     }
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Source accent bar
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .height(48.dp)
+                        .background(accent),
+                )
                 Icon(
                     Icons.Filled.DragHandle,
                     contentDescription = "Drag to reorder",
                     tint = OnSurfaceMuted,
-                    modifier = Modifier.size(22.dp),
-                )
-                Text(
-                    text = PreferencesRepository.hourlyTabDisplayName(item.id),
-                    color = if (item.enabled) Color.White else OnSurfaceMuted,
-                    fontSize = 15.sp,
                     modifier = Modifier
+                        .padding(start = 6.dp)
+                        .size(22.dp),
+                )
+                Column(
+                    Modifier
                         .weight(1f)
                         .padding(horizontal = 8.dp),
-                )
+                ) {
+                    Text(
+                        text = PreferencesRepository.hourlyTabDisplayName(item.id),
+                        color = if (item.enabled) Color.White else OnSurfaceMuted,
+                        fontSize = 15.sp,
+                    )
+                    Text(
+                        text = source.shortLabel,
+                        color = accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
                 IconButton(
                     onClick = { move(index, index - 1) },
                     enabled = index > 0,

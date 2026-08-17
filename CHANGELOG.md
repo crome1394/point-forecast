@@ -7,6 +7,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.6] — 2026-08-16
+
+### Fixed
+
+- Space weather (SWPC) is not fetched on cold start even when a city is saved; only when Space Weather or Hourly is opened
+- Optional Hourly tabs skip their network calls when disabled (tides/CO-OPS, Open-Meteo weather, air quality)
+- Home screen widget: scaling icons, labels under icons, centered high/low with arrows after temps, even icon sizes
+
+### Changed
+
+- Settings Hourly tabs color-coded by data source (NWS / CO-OPS / Open-Meteo / SWPC) with legend
+- Default Hourly tab order grouped by data source (NWS → tides → Open-Meteo → SWPC)
+- About credit: Javier V.
+
 ## [1.1.5] — 2026-08-16
 
 ### Fixed

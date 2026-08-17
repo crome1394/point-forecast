@@ -87,7 +87,21 @@ class WeatherRepository(
         _loading.value = true
         _error.value = null
         return try {
-            val snap = api.fetchWeather(latitude, longitude, name)
+            // Skip optional network work when the user disabled those Hourly tabs.
+            val includeTides = prefs.isHourlyTabEnabled("Tides")
+            val includeOpenMeteoWeather =
+                prefs.isHourlyTabEnabled("Visibility") ||
+                    prefs.isHourlyTabEnabled("Pressure") ||
+                    prefs.isHourlyTabEnabled("UvIndex")
+            val includeAirQuality = prefs.isHourlyTabEnabled("AirQuality")
+            val snap = api.fetchWeather(
+                latitude = latitude,
+                longitude = longitude,
+                preferredName = name,
+                includeTides = includeTides,
+                includeOpenMeteoWeather = includeOpenMeteoWeather,
+                includeAirQuality = includeAirQuality,
+            )
             _snapshot.value = snap
             prefs.saveSnapshot(snap)
             WeatherWidgetUpdater.updateAll(context, snap)

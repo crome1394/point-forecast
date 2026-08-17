@@ -28,10 +28,18 @@ class NwsApi(
     private val tideService: TideService? = null,
     private val openMeteoService: OpenMeteoService? = OpenMeteoService(),
 ) {
+    /**
+     * @param includeTides when false, skip CO-OPS / USGS water-level network calls
+     * @param includeOpenMeteoWeather UV / visibility / pressure (api.open-meteo.com)
+     * @param includeAirQuality US AQI (air-quality-api.open-meteo.com)
+     */
     suspend fun fetchWeather(
         latitude: Double,
         longitude: Double,
         preferredName: String? = null,
+        includeTides: Boolean = true,
+        includeOpenMeteoWeather: Boolean = true,
+        includeAirQuality: Boolean = true,
     ): WeatherSnapshot = withContext(Dispatchers.IO) {
         val lat = String.format(Locale.US, "%.4f", latitude)
         val lon = String.format(Locale.US, "%.4f", longitude)
@@ -59,15 +67,28 @@ class NwsApi(
                 runCatching { fetchActiveAlerts(latitude, longitude) }.getOrNull()
             }
             val tidesDeferred = async {
-                runCatching {
-                    tideService?.fetchHourlyTides(latitude, longitude) ?: TideService.TideResult.EMPTY
-                }.getOrDefault(TideService.TideResult.EMPTY)
+                if (!includeTides) {
+                    TideService.TideResult.EMPTY
+                } else {
+                    runCatching {
+                        tideService?.fetchHourlyTides(latitude, longitude)
+                            ?: TideService.TideResult.EMPTY
+                    }.getOrDefault(TideService.TideResult.EMPTY)
+                }
             }
             val extrasDeferred = async {
-                runCatching {
-                    openMeteoService?.fetchExtras(latitude, longitude)
-                        ?: OpenMeteoService.HourlyExtras.EMPTY
-                }.getOrDefault(OpenMeteoService.HourlyExtras.EMPTY)
+                if (!includeOpenMeteoWeather && !includeAirQuality) {
+                    OpenMeteoService.HourlyExtras.EMPTY
+                } else {
+                    runCatching {
+                        openMeteoService?.fetchExtras(
+                            latitude,
+                            longitude,
+                            includeWeather = includeOpenMeteoWeather,
+                            includeAirQuality = includeAirQuality,
+                        ) ?: OpenMeteoService.HourlyExtras.EMPTY
+                    }.getOrDefault(OpenMeteoService.HourlyExtras.EMPTY)
+                }
             }
 
             parseSnapshot(
@@ -1042,7 +1063,7 @@ class NwsApi(
 
     companion object {
         const val USER_AGENT =
-            "PointForecast/1.1.5 (Android; open-source; https://github.com/crome1394/point-forecast)"
+            "PointForecast/1.1.6 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

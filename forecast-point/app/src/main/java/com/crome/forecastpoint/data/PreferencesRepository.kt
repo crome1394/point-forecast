@@ -264,6 +264,13 @@ class PreferencesRepository(private val context: Context) {
     suspend fun getWidgetShowHighLowOnce(): Boolean =
         widgetShowHighLow.first()
 
+    /** Whether an Hourly tab is enabled (drives optional network fetches). */
+    suspend fun isHourlyTabEnabled(id: String): Boolean =
+        hourlyTabConfig.first().firstOrNull { it.id == id }?.enabled ?: true
+
+    suspend fun getHourlyTabConfigOnce(): List<HourlyTabConfigItem> =
+        hourlyTabConfig.first()
+
     suspend fun setMapSearchAtBottom(bottom: Boolean) {
         context.dataStore.edit { it[keyMapSearchBottom] = bottom }
     }
@@ -477,16 +484,20 @@ class PreferencesRepository(private val context: Context) {
         /**
          * Default Hourly tab order (must match [com.crome.forecastpoint.ui.screens.HourlyTab] names).
          */
+        /**
+         * Default Hourly tab order, grouped by data source for Settings UX:
+         * NWS → NOAA CO-OPS tides → Open-Meteo weather/AQ → SWPC.
+         */
         val DEFAULT_HOURLY_TAB_ORDER = listOf(
             "Temperature",
             "Precipitation",
             "Wind",
-            "Tides",
             "Conditions",
-            "AirQuality",
+            "Tides",
             "Visibility",
             "Pressure",
             "UvIndex",
+            "AirQuality",
             "SpaceWeather",
         )
 

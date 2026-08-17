@@ -34,14 +34,30 @@ class OpenMeteoService(
         }
     }
 
-    suspend fun fetchExtras(latitude: Double, longitude: Double): HourlyExtras =
+    suspend fun fetchExtras(
+        latitude: Double,
+        longitude: Double,
+        includeWeather: Boolean = true,
+        includeAirQuality: Boolean = true,
+    ): HourlyExtras =
         withContext(Dispatchers.IO) {
+            if (!includeWeather && !includeAirQuality) return@withContext HourlyExtras.EMPTY
             coroutineScope {
                 val weather = async {
-                    runCatching { fetchWeatherHourly(latitude, longitude) }.getOrDefault(HourlyExtras.EMPTY)
+                    if (!includeWeather) {
+                        HourlyExtras.EMPTY
+                    } else {
+                        runCatching { fetchWeatherHourly(latitude, longitude) }
+                            .getOrDefault(HourlyExtras.EMPTY)
+                    }
                 }
                 val air = async {
-                    runCatching { fetchAirQuality(latitude, longitude) }.getOrDefault(HourlyExtras.EMPTY)
+                    if (!includeAirQuality) {
+                        HourlyExtras.EMPTY
+                    } else {
+                        runCatching { fetchAirQuality(latitude, longitude) }
+                            .getOrDefault(HourlyExtras.EMPTY)
+                    }
                 }
                 val w = weather.await()
                 val a = air.await()

@@ -168,7 +168,23 @@ object WeatherWidgetUpdater {
         return minOf(fromHeight, fromWidth).coerceIn(96, 200)
     }
 
-    /** Classic layout: period name + single temp (like reference "Tue AM 83°"). */
+    /**
+     * Centered temp strings with a trailing arrow (or spaces) so every cell
+     * occupies the same glyph width: "79°↑" / "61°↓" / "62° ".
+     */
+    private fun formatTempWithArrow(tempF: Int?, arrow: Char?): String {
+        if (tempF == null) return "  —  "
+        val body = String.format(Locale.US, "%d°", tempF)
+        return when (arrow) {
+            null -> "$body "
+            else -> "$body$arrow"
+        }
+    }
+
+    /** Spacer matching a temp line height so single-temp cells don't grow the icon. */
+    private val tempLineSpacer = "\u00A0"
+
+    /** Classic layout: period name under icon + single temp to the right. */
     private fun bindPeriodCells(
         context: Context,
         views: RemoteViews,
@@ -181,14 +197,17 @@ object WeatherWidgetUpdater {
             if (p == null) {
                 views.setTextViewText(dayNameIds[index], "")
                 views.setTextViewText(dayHiIds[index], "")
-                views.setViewVisibility(dayLoIds[index], View.GONE)
+                views.setTextViewText(dayLoIds[index], tempLineSpacer)
+                views.setViewVisibility(dayLoIds[index], View.VISIBLE)
             } else {
                 views.setTextViewText(dayNameIds[index], shortPeriodLabel(p))
                 views.setTextViewText(
                     dayHiIds[index],
-                    p.temperatureF?.let { "$it° F" } ?: "—",
+                    formatTempWithArrow(p.temperatureF, arrow = null),
                 )
-                views.setViewVisibility(dayLoIds[index], View.GONE)
+                // Always keep second line so icon height matches high/low cells.
+                views.setTextViewText(dayLoIds[index], tempLineSpacer)
+                views.setViewVisibility(dayLoIds[index], View.VISIBLE)
                 IconMapper.loadBitmap(context, p.iconCode, maxPx = iconPx)?.let {
                     views.setImageViewBitmap(dayIconIds[index], it)
                 }
@@ -196,7 +215,7 @@ object WeatherWidgetUpdater {
         }
     }
 
-    /** Day high/low mode: ↑ high, ↓ low under the day name. */
+    /** Day high/low: label under icon; centered "79°↑" / "61°↓". */
     private fun bindHighLowCells(
         context: Context,
         views: RemoteViews,
@@ -205,28 +224,49 @@ object WeatherWidgetUpdater {
     ) {
         for (index in 0 until 6) {
             val day = days.getOrNull(index)
+            // Always VISIBLE two temp lines so every icon row is the same height.
+            views.setViewVisibility(dayLoIds[index], View.VISIBLE)
             if (day == null) {
                 views.setTextViewText(dayNameIds[index], "")
                 views.setTextViewText(dayHiIds[index], "")
-                views.setTextViewText(dayLoIds[index], "")
-                views.setViewVisibility(dayLoIds[index], View.GONE)
+                views.setTextViewText(dayLoIds[index], tempLineSpacer)
             } else {
-                views.setTextViewText(dayNameIds[index], day.dayName)
-                // Arrows after the number (e.g. "79° ↑" / "61° ↓"), matching preferred layout.
-                views.setTextViewText(
-                    dayHiIds[index],
-                    day.highF?.let { "$it° ↑" } ?: (day.lowF?.let { "$it°" } ?: "—"),
-                )
-                if (day.lowF != null && day.highF != null) {
-                    views.setViewVisibility(dayLoIds[index], View.VISIBLE)
-                    views.setTextViewText(dayLoIds[index], "${day.lowF}° ↓")
-                } else {
-                    views.setViewVisibility(dayLoIds[index], View.GONE)
+                views.setTextViewText(dayNameIds[index], shortDayLabel(day.dayName))
+                when {
+                    day.highF != null && day.lowF != null -> {
+                        views.setTextViewText(dayHiIds[index], formatTempWithArrow(day.highF, '↑'))
+                        views.setTextViewText(dayLoIds[index], formatTempWithArrow(day.lowF, '↓'))
+                    }
+                    day.highF != null -> {
+                        views.setTextViewText(dayHiIds[index], formatTempWithArrow(day.highF, '↑'))
+                        views.setTextViewText(dayLoIds[index], tempLineSpacer)
+                    }
+                    day.lowF != null -> {
+                        // Single overnight low: still use two lines (spacer below).
+                        views.setTextViewText(dayHiIds[index], formatTempWithArrow(day.lowF, '↓'))
+                        views.setTextViewText(dayLoIds[index], tempLineSpacer)
+                    }
+                    else -> {
+                        views.setTextViewText(dayHiIds[index], "  —  ")
+                        views.setTextViewText(dayLoIds[index], tempLineSpacer)
+                    }
                 }
                 IconMapper.loadBitmap(context, day.iconCode, maxPx = iconPx)?.let {
                     views.setImageViewBitmap(dayIconIds[index], it)
                 }
             }
+        }
+    }
+
+    /** Weekday labels; keep "Tonight" readable, shorten long day names to 3 letters. */
+    private fun shortDayLabel(name: String): String {
+        val n = name.trim()
+        return when {
+            n.equals("Tonight", ignoreCase = true) -> "Tonight"
+            n.equals("Today", ignoreCase = true) -> "Today"
+            n.equals("Overnight", ignoreCase = true) -> "Overnight"
+            n.length <= 3 -> n
+            else -> n.take(3)
         }
     }
 
