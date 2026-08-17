@@ -108,6 +108,8 @@ fun SunMoonScreen(
     mapFocusRadiusMiles: Int = 250,
     hazardHistoryDays: Int = 7,
     onEnsureSpaceWeather: (() -> Unit)? = null,
+    /** Reverse-geocode lat/lon → place name for historical tornado rows. */
+    onResolveTornadoPlace: (suspend (lat: Double, lon: Double) -> String)? = null,
 ) {
     if (body == CelestialBody.SpaceWeather) {
         LaunchedEffect(Unit) { onEnsureSpaceWeather?.invoke() }
@@ -142,6 +144,7 @@ fun SunMoonScreen(
             settingsDefaultRadiusMiles = mapFocusRadiusMiles,
             settingsDefaultHistoryDays = hazardHistoryDays,
             onExploreParams = { r, d, s, e -> onEnsureSevereWeather?.invoke(r, d, s, e) },
+            onResolvePlace = onResolveTornadoPlace,
         )
         return
     }

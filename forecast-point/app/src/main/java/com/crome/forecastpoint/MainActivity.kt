@@ -679,6 +679,9 @@ class MainActivity : ComponentActivity() {
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
                                     hazardHistoryDays = hazardHistoryDays,
                                     onEnsureSpaceWeather = { viewModel.ensureSpaceWeather() },
+                                    onResolveTornadoPlace = { lat, lon ->
+                                        viewModel.reverseGeocode(lat, lon).name
+                                    },
                                 )
                             }
                         }

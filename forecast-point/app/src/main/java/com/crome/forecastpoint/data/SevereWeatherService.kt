@@ -60,6 +60,11 @@ class SevereWeatherService(
         val distanceMiles: Double,
         /** SPC daily storm-reports page for this date (HTML details). */
         val detailUrl: String? = null,
+        /**
+         * True when [location] is start coordinates from WCM (no city in the source file).
+         * UI may reverse-geocode these to a nearby place name.
+         */
+        val locationIsCoordinate: Boolean = false,
     )
 
     data class ActiveAlert(
@@ -227,8 +232,14 @@ class SevereWeatherService(
 
     /**
      * Severe-weather (tornado) reports near the city for [startMs]..[endMs].
-     * - Span ≤ [DAILY_REPORT_MAX_DAYS]: SPC daily preliminary storm-report CSVs
-     * - Longer: SPC WCM official yearly tornado archives (+ 1950 archive when needed)
+     *
+     * - **Recent window only** (entire range within the last ~[DAILY_REPORT_MAX_DAYS] days):
+     *   SPC daily preliminary storm-report CSVs (those files do not exist for historical years).
+     * - **Anything older** (custom ranges like July 1992, or multi-year presets):
+     *   SPC WCM official yearly files + 1950–present archive.
+     *
+     * Previously we chose daily CSVs whenever the *span* was ≤ 30 days, which broke short
+     * custom ranges far in the past (e.g. a single day in 1992 returned zero reports).
      */
     private fun fetchSevereWeatherReports(
         refLat: Double,
@@ -237,10 +248,12 @@ class SevereWeatherService(
         startMs: Long,
         endMs: Long,
     ): List<TornadoReport> {
-        val daysBack = (
-            ((endMs - startMs).coerceAtLeast(0L) / (24L * 3600L * 1000L)).toInt()
-            ).coerceAtLeast(1)
-        return if (daysBack <= DAILY_REPORT_MAX_DAYS) {
+        val now = System.currentTimeMillis()
+        val dayMs = 24L * 3600L * 1000L
+        val oldestDailyStart = now - DAILY_REPORT_MAX_DAYS.toLong() * dayMs
+        // Daily CSVs only cover roughly the last month — not historical custom ranges.
+        val entireRangeIsRecent = startMs >= oldestDailyStart && endMs >= oldestDailyStart
+        return if (entireRangeIsRecent) {
             fetchDailyTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
         } else {
             fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
@@ -549,24 +562,34 @@ class SevereWeatherService(
             }
             val ymd = ymdFmt.format(day.time)
             val hhmm = timeStr.take(5).replace(":", "")
+            // WCM rows have start lat/lon, not city names — show coordinates + state.
             val place = buildString {
-                append("Tornado")
+                append(String.format(Locale.US, "%.2f°N", lat))
+                append(", ")
+                // Western hemisphere longitudes are negative in the file
+                val lonAbs = kotlin.math.abs(lon)
+                append(String.format(Locale.US, "%.2f°%s", lonAbs, if (lon <= 0) "W" else "E"))
                 if (state.isNotBlank()) append(" · $state")
-                if (dateStr.isNotBlank()) append(" · $dateStr")
             }
+            val fips = p.getOrNull(24)?.trim().orEmpty() // f1 county FIPS (often present)
             out += TornadoReport(
                 id = "wcm_${yr}_${mo}_${dy}_${lat}_$lon",
                 timeLabel = if (hhmm.length >= 3) hhmm else timeStr,
                 epochMs = epoch,
                 fScale = fScale,
                 location = place,
-                county = "",
+                county = if (fips.isNotBlank() && fips != "0") "County FIPS $fips" else "",
                 state = state,
                 latitude = lat,
                 longitude = lon,
-                comments = "Official SPC WCM tornado record · tap for daily storm reports page",
+                comments = buildString {
+                    append("Official SPC WCM tornado record")
+                    if (dateStr.isNotBlank()) append(" · $dateStr")
+                    append(" · tap for daily storm reports page")
+                },
                 distanceMiles = dist,
                 detailUrl = spcDailyReportUrl(ymd),
+                locationIsCoordinate = true,
             )
         }
     }
@@ -667,7 +690,7 @@ class SevereWeatherService(
         /** Practical max look-back (SPC WCM tornado archive: 1950–present; 20y is well covered). */
         const val MAX_HISTORY_DAYS = 7300 // 20 years
         private const val USER_AGENT =
-            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
+            "PointForecast/1.1.6 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()
