@@ -1042,7 +1042,7 @@ class NwsApi(
 
     companion object {
         const val USER_AGENT =
-            "PointForecast/1.1.4 (Android; open-source; https://github.com/crome1394/point-forecast)"
+            "PointForecast/1.1.5 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

@@ -7,6 +7,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.5] — 2026-08-16
+
+### Fixed
+
+- Space weather (SWPC) is not fetched on cold start even when a city is saved; only when Space Weather or Hourly is opened (or after it was already loaded this session)
+- Home screen widget at default **4×2**: compact layout, shorter header timestamp, fixed-size period cells so labels no longer overlap or clip
+
 ## [1.1.4] — 2026-08-15
 
 ### Fixed

@@ -124,9 +124,8 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
             runCatching {
                 repo.bootstrap()
                 if (prefs.getActiveLocationOnce() != null) {
+                    // Forecast only — do not contact SWPC until Space Weather / Hourly is opened.
                     repo.refreshActive(manual = false)
-                    // Planetary SWPC feed only after a location exists (not on empty cold start).
-                    refreshSpaceWeather()
                 }
                 WeatherUpdateScheduler.applyFromPrefs(getApplication())
             }
@@ -136,18 +135,23 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     fun manualRefresh() {
         viewModelScope.launch {
             runCatching { repo.refreshActive(manual = true) }
-            if (prefs.getActiveLocationOnce() != null || snapshot.value != null) {
-                refreshSpaceWeather()
-            }
+            // Quakes/storms only if already loaded this session; SWPC stays on-demand.
             val snap = snapshot.value
             if (snap != null) {
-                refreshEarthquakes(snap.latitude, snap.longitude)
-                refreshSevereWeather(snap.latitude, snap.longitude)
+                if (_earthquakes.value != null) {
+                    refreshEarthquakes(snap.latitude, snap.longitude)
+                }
+                if (_severeWeather.value != null) {
+                    refreshSevereWeather(snap.latitude, snap.longitude)
+                }
+                if (_spaceWeather.value != null) {
+                    refreshSpaceWeather()
+                }
             }
         }
     }
 
-    /** Load SWPC when the user opens Space Weather / needs the hourly tab indicator. */
+    /** Load SWPC only when the user opens Space Weather or the Hourly screen. */
     fun ensureSpaceWeather() {
         viewModelScope.launch {
             val current = _spaceWeather.value
@@ -367,7 +371,6 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     fun selectFavorite(loc: SavedLocation) {
         viewModelScope.launch {
             runCatching { repo.selectLocation(loc, fetch = true) }
-                .onSuccess { refreshSpaceWeather() }
         }
     }
 
@@ -376,7 +379,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
             runCatching {
                 repo.useCoordinates(result.latitude, result.longitude, result.name, saveFavorite = true)
                 _searchResults.value = emptyList()
-            }.onSuccess { refreshSpaceWeather() }
+            }
         }
     }
 
@@ -393,7 +396,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                     result.name,
                     saveFavorite = true,
                 )
-            }.onSuccess { refreshSpaceWeather() }
+            }
         }
     }
 
@@ -401,7 +404,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching {
                 repo.useCoordinates(location.latitude, location.longitude, label, saveFavorite = false)
-            }.onSuccess { refreshSpaceWeather() }
+            }
         }
     }
 
