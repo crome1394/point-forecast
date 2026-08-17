@@ -12,7 +12,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Space weather (SWPC) is not fetched on cold start even when a city is saved; only when Space Weather or Hourly is opened (or after it was already loaded this session)
-- Home screen widget at default **4×2**: compact layout, shorter header timestamp, fixed-size period cells so labels no longer overlap or clip
+- Home screen widget: restore scaling period icons (1.1.4-style), high/low arrows after temperatures; About credit shortened to Javier V.
 
 ## [1.1.4] — 2026-08-15
 
@@ -34,7 +34,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Severe Weather screen: **tropical strength** and **tornado EF** sliders; **Severe weather reports** with tap-through to SPC daily pages
 - Loading banners while hazard APIs refresh
 - Classic **push-pin** map markers (red = city, green = reports, cyan = tropical storms)
-- About screen thanks to **Javier Velasquez** for UX ideas, troubleshooting, and QA
+- About screen thanks to **Javier V.** for UX ideas, troubleshooting, and QA
 - Plain-language **About** legends on earthquake and severe weather screens (acronyms expanded)
 
 ### Changed

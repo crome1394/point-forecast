@@ -112,7 +112,7 @@ fun AboutScreen() {
             fontSize = 13.sp,
         )
         Text(
-            "Special thanks to my dear friend Javier Velasquez for his ideas and help " +
+            "Special thanks to my dear friend Javier V. for his ideas and help " +
                 "troubleshooting the UX, and the QA.",
             color = Color.White,
             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),

@@ -119,16 +119,9 @@ object WeatherWidgetUpdater {
         )
         views.setOnClickPendingIntent(R.id.widget_root, openApp)
 
-        // Compact 4×2 layout: keep bitmaps modest so labels stay readable.
+        // Scale icon bitmaps with widget size (taller/wider → sharper larger icons)
         val dayIconPx = dayIconPixelSize(minWidthDp, minHeightDp)
-        val currentIconPx = (dayIconPx * 1.2f).toInt().coerceIn(72, 160)
-
-        // Very short widgets: one period row only (avoids clipping bottom strip).
-        val shortWidget = minHeightDp < 130
-        views.setViewVisibility(
-            R.id.widget_forecast_row2,
-            if (shortWidget) View.GONE else View.VISIBLE,
-        )
+        val currentIconPx = (dayIconPx * 1.15f).toInt().coerceIn(96, 200)
 
         if (snap == null) {
             views.setTextViewText(R.id.widget_location, "Point Forecast")
@@ -138,10 +131,10 @@ object WeatherWidgetUpdater {
         }
 
         views.setTextViewText(R.id.widget_location, snap.locationName)
-        views.setTextViewText(R.id.widget_datetime, formatHeaderDate(snap, compact = shortWidget || minWidthDp < 280))
+        views.setTextViewText(R.id.widget_datetime, formatHeaderDate(snap))
         views.setTextViewText(
             R.id.widget_temp,
-            snap.current.temperatureF?.let { "$it°" } ?: "—",
+            snap.current.temperatureF?.let { "$it° F" } ?: "—",
         )
         views.setTextViewText(R.id.widget_sunrise, snap.sunrise ?: "—")
         views.setTextViewText(R.id.widget_sunset, snap.sunset ?: "—")
@@ -150,28 +143,29 @@ object WeatherWidgetUpdater {
             views.setImageViewBitmap(R.id.widget_current_icon, it)
         }
 
-        val cellCount = if (shortWidget) 3 else 6
         if (showHighLow) {
-            bindHighLowCells(context, views, snap.days, dayIconPx, cellCount)
+            bindHighLowCells(context, views, snap.days, dayIconPx)
         } else {
-            bindPeriodCells(context, views, snap.periods, dayIconPx, cellCount)
+            bindPeriodCells(context, views, snap.periods, dayIconPx)
         }
         return views
     }
 
-    /** Modest bitmaps; layout uses fixed ~28dp icons on the 4×2 default. */
+    /** Larger bitmaps for 5×2 / 5×3 so icons look sharp when layout expands. */
     private fun dayIconPixelSize(minWidthDp: Int, minHeightDp: Int): Int {
+        // Rough cell height ~ half of remaining body; scale up on tall widgets
         val fromHeight = when {
-            minHeightDp >= 200 -> 128
-            minHeightDp >= 150 -> 96
-            else -> 80
+            minHeightDp >= 220 -> 180
+            minHeightDp >= 160 -> 150
+            minHeightDp >= 130 -> 128
+            else -> 110
         }
         val fromWidth = when {
-            minWidthDp >= 320 -> 120
-            minWidthDp >= 280 -> 100
-            else -> 80
+            minWidthDp >= 320 -> 170
+            minWidthDp >= 280 -> 150
+            else -> 120
         }
-        return minOf(fromHeight, fromWidth).coerceIn(64, 128)
+        return minOf(fromHeight, fromWidth).coerceIn(96, 200)
     }
 
     /** Classic layout: period name + single temp (like reference "Tue AM 83°"). */
@@ -180,21 +174,19 @@ object WeatherWidgetUpdater {
         views: RemoteViews,
         periods: List<ForecastPeriod>,
         iconPx: Int,
-        cellCount: Int = 6,
     ) {
-        val cells = periods.take(cellCount)
+        val cells = periods.take(6)
         for (index in 0 until 6) {
             val p = cells.getOrNull(index)
-            if (p == null || index >= cellCount) {
+            if (p == null) {
                 views.setTextViewText(dayNameIds[index], "")
                 views.setTextViewText(dayHiIds[index], "")
                 views.setViewVisibility(dayLoIds[index], View.GONE)
-                views.setImageViewResource(dayIconIds[index], 0)
             } else {
                 views.setTextViewText(dayNameIds[index], shortPeriodLabel(p))
                 views.setTextViewText(
                     dayHiIds[index],
-                    p.temperatureF?.let { "$it°" } ?: "—",
+                    p.temperatureF?.let { "$it° F" } ?: "—",
                 )
                 views.setViewVisibility(dayLoIds[index], View.GONE)
                 IconMapper.loadBitmap(context, p.iconCode, maxPx = iconPx)?.let {
@@ -210,27 +202,25 @@ object WeatherWidgetUpdater {
         views: RemoteViews,
         days: List<DayForecast>,
         iconPx: Int,
-        cellCount: Int = 6,
     ) {
         for (index in 0 until 6) {
             val day = days.getOrNull(index)
-            if (day == null || index >= cellCount) {
+            if (day == null) {
                 views.setTextViewText(dayNameIds[index], "")
                 views.setTextViewText(dayHiIds[index], "")
                 views.setTextViewText(dayLoIds[index], "")
                 views.setViewVisibility(dayLoIds[index], View.GONE)
-                views.setImageViewResource(dayIconIds[index], 0)
             } else {
-                views.setTextViewText(dayNameIds[index], day.dayName.take(3))
-                // Prefer one line on tight widgets when both high and low exist.
+                views.setTextViewText(dayNameIds[index], day.dayName)
+                // Arrows after the number (e.g. "79° ↑" / "61° ↓"), matching preferred layout.
+                views.setTextViewText(
+                    dayHiIds[index],
+                    day.highF?.let { "$it° ↑" } ?: (day.lowF?.let { "$it°" } ?: "—"),
+                )
                 if (day.lowF != null && day.highF != null) {
-                    views.setTextViewText(dayHiIds[index], "${day.highF}°/${day.lowF}°")
-                    views.setViewVisibility(dayLoIds[index], View.GONE)
+                    views.setViewVisibility(dayLoIds[index], View.VISIBLE)
+                    views.setTextViewText(dayLoIds[index], "${day.lowF}° ↓")
                 } else {
-                    views.setTextViewText(
-                        dayHiIds[index],
-                        day.highF?.let { "$it°" } ?: (day.lowF?.let { "$it°" } ?: "—"),
-                    )
                     views.setViewVisibility(dayLoIds[index], View.GONE)
                 }
                 IconMapper.loadBitmap(context, day.iconCode, maxPx = iconPx)?.let {
@@ -280,13 +270,10 @@ object WeatherWidgetUpdater {
         return "$day $suffix"
     }
 
-    private fun formatHeaderDate(snap: WeatherSnapshot, compact: Boolean = true): String {
+    private fun formatHeaderDate(snap: WeatherSnapshot): String {
         val obs = snap.observationTimeLabel
-        if (!obs.isNullOrBlank()) {
-            // Observation labels can be long; keep a short form on the widget.
-            return if (compact && obs.length > 28) obs.take(28).trimEnd() + "…" else obs
-        }
-        val pattern = if (compact) "EEE MMM d · h:mm a" else "EEEE, MMM d · h:mm a"
-        return SimpleDateFormat(pattern, Locale.US).format(java.util.Date(snap.updatedAtEpochMs))
+        if (!obs.isNullOrBlank()) return obs
+        val fmt = SimpleDateFormat("EEEE, MMMM d, yyyy h:mm a", Locale.US)
+        return fmt.format(java.util.Date(snap.updatedAtEpochMs))
     }
 }
