@@ -29,13 +29,18 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.LocationCity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -43,7 +48,9 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberDateRangePickerState
+import com.crome.forecastpoint.data.SavedLocation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -249,6 +256,145 @@ fun HazardLoadingBanner(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
             )
+        }
+    }
+}
+
+/** Favorites plus the active city when it is not already saved. */
+fun hazardCityOptions(
+    favorites: List<SavedLocation>,
+    latitude: Double,
+    longitude: Double,
+    locationName: String?,
+): List<SavedLocation> {
+    val options = ArrayList<SavedLocation>(favorites.size + 1)
+    val inFavorites = favorites.any {
+        kotlin.math.abs(it.latitude - latitude) < 0.02 &&
+            kotlin.math.abs(it.longitude - longitude) < 0.02
+    }
+    if (!inFavorites) {
+        val name = locationName?.takeIf { it.isNotBlank() }
+            ?: String.format(java.util.Locale.US, "%.2f, %.2f", latitude, longitude)
+        options += SavedLocation(
+            id = "active-explore",
+            name = name,
+            latitude = latitude,
+            longitude = longitude,
+            isFavorite = false,
+        )
+    }
+    options += favorites
+    return options
+}
+
+/**
+ * City picker for hazard screens. Defaults to the app’s current city; choosing a
+ * favorite updates the active forecast city (Forecast / Hourly stay in sync).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HazardCityPickerCard(
+    cities: List<SavedLocation>,
+    selectedLatitude: Double,
+    selectedLongitude: Double,
+    selectedName: String?,
+    onSelectCity: (SavedLocation) -> Unit,
+    accent: Color,
+    compact: Boolean = true,
+) {
+    if (cities.isEmpty()) return
+
+    val pad = if (compact) 12.dp else 16.dp
+    var expanded by remember { mutableStateOf(false) }
+
+    val selected = remember(cities, selectedLatitude, selectedLongitude, selectedName) {
+        cities.firstOrNull {
+            kotlin.math.abs(it.latitude - selectedLatitude) < 0.02 &&
+                kotlin.math.abs(it.longitude - selectedLongitude) < 0.02
+        } ?: cities.firstOrNull {
+            selectedName != null && it.name.equals(selectedName, ignoreCase = true)
+        }
+    }
+    val label = selected?.name
+        ?: selectedName?.takeIf { it.isNotBlank() }
+        ?: String.format(java.util.Locale.US, "%.2f, %.2f", selectedLatitude, selectedLongitude)
+
+    Surface(
+        Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = if (compact) 8.dp else 16.dp,
+                vertical = if (compact) 4.dp else 6.dp,
+            ),
+        color = if (compact) Color(0xFF1E2A30) else SurfaceDark,
+        shape = RoundedCornerShape(if (compact) 14.dp else 18.dp),
+    ) {
+        Column(
+            Modifier
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.18f), Color.Transparent),
+                    ),
+                )
+                .padding(pad),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.LocationCity,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "City",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                    )
+                    Text(
+                        "Defaults to your forecast city · picks from saved favorites",
+                        color = OnSurfaceMuted,
+                        fontSize = 11.sp,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it },
+            ) {
+                TextField(
+                    value = label,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                    colors = ExposedDropdownMenuDefaults.textFieldColors(
+                        focusedContainerColor = Color(0xFF263238),
+                        unfocusedContainerColor = Color(0xFF263238),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                    ),
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    cities.forEach { city ->
+                        DropdownMenuItem(
+                            text = { Text(city.name) },
+                            onClick = {
+                                onSelectCity(city)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }

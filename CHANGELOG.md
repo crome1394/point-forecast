@@ -21,6 +21,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Reverse-geocode of WCM tornado coordinates to nearby place names (Nominatim, rate-limited)
 - Hazard explore distance chips: **50m / 100m / 250m / 500m / Custom** (miles); custom field clears on focus
 - Custom history date picker opens with a blank selection
+- City dropdown on Severe Weather and Earthquakes settings (defaults to forecast city; picks from favorites)
 
 ### Changed
 

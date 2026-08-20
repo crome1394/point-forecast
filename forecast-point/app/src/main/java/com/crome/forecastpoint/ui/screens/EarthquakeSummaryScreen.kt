@@ -53,6 +53,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.crome.forecastpoint.R
 import com.crome.forecastpoint.data.EarthquakeService
 import com.crome.forecastpoint.data.PreferencesRepository
+import com.crome.forecastpoint.data.SavedLocation
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
@@ -111,10 +112,15 @@ fun EarthquakeSummaryScreen(
         historyStartMs: Long?,
         historyEndMs: Long?,
     ) -> Unit = { _, _, _, _ -> },
+    favorites: List<SavedLocation> = emptyList(),
+    onSelectCity: (SavedLocation) -> Unit = {},
 ) {
     var aboutExpanded by remember { mutableStateOf(false) }
     var settingsExpanded by remember { mutableStateOf(false) }
     var mapFullscreen by remember { mutableStateOf(false) }
+    val cityOptions = remember(favorites, latitude, longitude, locationName) {
+        hazardCityOptions(favorites, latitude, longitude, locationName)
+    }
     var exploreRadius by remember(settingsDefaultRadiusMiles) {
         mutableIntStateOf(settingsDefaultRadiusMiles)
     }
@@ -266,6 +272,15 @@ fun EarthquakeSummaryScreen(
             summary = settingsSummary,
             onReset = { resetHazardSettings() },
         ) {
+            HazardCityPickerCard(
+                cities = cityOptions,
+                selectedLatitude = latitude,
+                selectedLongitude = longitude,
+                selectedName = locationName,
+                onSelectCity = onSelectCity,
+                accent = QuakeAccent,
+                compact = true,
+            )
             HazardExploreRadiusCard(
                 exploreRadiusMiles = exploreRadius,
                 settingsDefaultMiles = settingsDefaultRadiusMiles,

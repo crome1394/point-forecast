@@ -719,6 +719,10 @@ class MainActivity : ComponentActivity() {
                                     onResolveTornadoPlace = { lat, lon ->
                                         viewModel.reverseGeocode(lat, lon).name
                                     },
+                                    favorites = favorites,
+                                    onSelectHazardCity = { loc ->
+                                        viewModel.selectHazardCity(loc)
+                                    },
                                 )
                             }
                             }
