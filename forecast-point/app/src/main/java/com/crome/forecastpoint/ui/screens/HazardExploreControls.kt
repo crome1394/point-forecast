@@ -772,9 +772,14 @@ private fun formatCustomRangeLabel(startMs: Long, endMs: Long): String {
     return if (a == b) a else "$a – $b"
 }
 
+/**
+ * Format a Material DatePicker selection for display.
+ * Picker millis are UTC midnights representing calendar dates — format in UTC
+ * so "June 1" does not show as "May 31" in US timezones.
+ */
 private fun formatShortDate(epochMs: Long): String {
     val fmt = SimpleDateFormat("MMM d, yyyy", Locale.US).apply {
-        timeZone = TimeZone.getDefault()
+        timeZone = TimeZone.getTimeZone("UTC")
     }
     return fmt.format(Date(epochMs))
 }

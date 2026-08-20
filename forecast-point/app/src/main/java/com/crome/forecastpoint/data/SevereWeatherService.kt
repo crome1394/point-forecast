@@ -233,13 +233,13 @@ class SevereWeatherService(
     /**
      * Severe-weather (tornado) reports near the city for [startMs]..[endMs].
      *
-     * - **Recent window only** (entire range within the last ~[DAILY_REPORT_MAX_DAYS] days):
-     *   SPC daily preliminary storm-report CSVs (those files do not exist for historical years).
-     * - **Anything older** (custom ranges like July 1992, or multi-year presets):
-     *   SPC WCM official yearly files + 1950–present archive.
+     * Sources are **merged**:
+     * - **SPC daily CSVs** for dates within [DAILY_CSV_LOOKBACK_DAYS] (preliminary reports stay
+     *   online for many months; WCM yearly files for the *current* year often do not exist yet).
+     * - **SPC WCM** yearly + 1950–present archive for official / historical records.
      *
-     * Previously we chose daily CSVs whenever the *span* was ≤ 30 days, which broke short
-     * custom ranges far in the past (e.g. a single day in 1992 returned zero reports).
+     * Choosing only-WCM for “older than 30 days” missed events like June 2026 when tested in
+     * August (no `2026_torn.csv` yet). Choosing only-daily for short spans missed 1992.
      */
     private fun fetchSevereWeatherReports(
         refLat: Double,
@@ -250,14 +250,22 @@ class SevereWeatherService(
     ): List<TornadoReport> {
         val now = System.currentTimeMillis()
         val dayMs = 24L * 3600L * 1000L
-        val oldestDailyStart = now - DAILY_REPORT_MAX_DAYS.toLong() * dayMs
-        // Daily CSVs only cover roughly the last month — not historical custom ranges.
-        val entireRangeIsRecent = startMs >= oldestDailyStart && endMs >= oldestDailyStart
-        return if (entireRangeIsRecent) {
-            fetchDailyTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
-        } else {
-            fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
+        val dailyHorizonStart = now - DAILY_CSV_LOOKBACK_DAYS.toLong() * dayMs
+        val merged = LinkedHashMap<String, TornadoReport>()
+
+        // Preliminary daily reports for the recent portion of the window
+        if (endMs >= dailyHorizonStart) {
+            val dailyFrom = maxOf(startMs, dailyHorizonStart)
+            fetchDailyTornadoReports(refLat, refLon, maxMiles, dailyFrom, endMs)
+                .forEach { merged[it.id] = it }
         }
+
+        // Official / multi-decade WCM (no-op for years with missing files)
+        fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
+            .forEach { merged.putIfAbsent(it.id, it) }
+
+        return selectTimeSpanningReports(merged.values.toList(), UI_MAX_REPORTS)
+            .sortedByDescending { it.epochMs }
     }
 
     private fun fetchDailyTornadoReports(
@@ -285,8 +293,11 @@ class SevereWeatherService(
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
+        val spanDays = (
+            ((endMs - startMs).coerceAtLeast(0L) / (24L * 3600L * 1000L)).toInt() + 3
+            ).coerceIn(1, DAILY_CSV_LOOKBACK_DAYS + 5)
         var guard = 0
-        while (!day.before(startDay) && guard < DAILY_REPORT_MAX_DAYS + 2) {
+        while (!day.before(startDay) && guard < spanDays) {
             guard++
             val ymd = ymdFmt.format(day.time)
             // Prefer filtered reports; fall back to unfiltered
@@ -297,7 +308,13 @@ class SevereWeatherService(
             var body: String? = null
             for (u in urls) {
                 body = httpGet(u)
-                if (!body.isNullOrBlank() && !body.contains("404", ignoreCase = true)) break
+                if (!body.isNullOrBlank() &&
+                    !body.contains("404", ignoreCase = true) &&
+                    !body.trimStart().startsWith("<!")
+                ) {
+                    break
+                }
+                body = null
             }
             // "today.csv" style alternate for the end day
             if (body.isNullOrBlank() && guard == 1) {
@@ -493,11 +510,13 @@ class SevereWeatherService(
             val dist = haversineMiles(refLat, refLon, lat, lon)
             if (dist > maxMiles) continue
             val epoch = parseSpcTime(dayUtc, timeStr)
+            // Daily CSV often leaves F_Scale as UNK while the survey rating is in Comments (e.g. "EF3").
+            val resolvedScale = resolveTornadoScale(fScale, comments)
             out += TornadoReport(
                 id = "${dayUtc.timeInMillis}_${timeStr}_${lat}_$lon",
                 timeLabel = timeStr,
                 epochMs = epoch,
-                fScale = fScale,
+                fScale = resolvedScale,
                 location = location,
                 county = county,
                 state = state,
@@ -508,6 +527,22 @@ class SevereWeatherService(
                 detailUrl = spcDailyReportUrl(ymd),
             )
         }
+    }
+
+    /**
+     * Prefer an explicit EF/F digit from the scale field; otherwise scrape Comments
+     * (common for preliminary SPC daily rows).
+     */
+    private fun resolveTornadoScale(rawScale: String, comments: String): String {
+        val fromField = Regex("""(?:EF|F)-?\s*([0-5])""", RegexOption.IGNORE_CASE)
+            .find(rawScale)?.groupValues?.get(1)
+        if (fromField != null) return "EF$fromField"
+        val fromComments = Regex("""\bEF-?\s*([0-5])\b""", RegexOption.IGNORE_CASE)
+            .find(comments)?.groupValues?.get(1)
+        if (fromComments != null) return "EF$fromComments"
+        val u = rawScale.trim().uppercase(Locale.US)
+        if (u.contains("UNK") || u.isBlank() || u == "—" || u == "-") return "UNK"
+        return rawScale.trim().ifBlank { "UNK" }
     }
 
     /**
@@ -678,8 +713,12 @@ class SevereWeatherService(
     }
 
     companion object {
-        /** Daily SPC CSVs are practical up to this many days; longer uses WCM yearly files. */
-        private const val DAILY_REPORT_MAX_DAYS = 30
+        /**
+         * How far back we will walk SPC *daily* storm-report CSVs.
+         * These files remain online for many months; current-year WCM yearly files
+         * are often missing until the season is finalized.
+         */
+        private const val DAILY_CSV_LOOKBACK_DAYS = 400
         /**
          * First year of SPC per-year `YYYY_torn.csv` files on the WCM site.
          * Earlier years require the multi-decade archive.

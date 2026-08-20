@@ -189,7 +189,9 @@ fun SevereWeatherSummaryScreen(
     }
 
     val historySummary = if (customRangeActive && customStartMs != null && customEndMs != null) {
-        val fmt = SimpleDateFormat("MMM d", Locale.US)
+        val fmt = SimpleDateFormat("MMM d", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
         "${fmt.format(java.util.Date(customStartMs!!))}–${fmt.format(java.util.Date(customEndMs!!))}"
     } else {
         formatHistoryDays(historyDays)
