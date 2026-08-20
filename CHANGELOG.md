@@ -7,6 +7,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.7] — 2026-08-17
+
+### Fixed
+
+- Hourly table uses **station / forecast-location** timezone (same as forecast card and Sun/Moon), not the device zone
+- Historical severe-weather custom ranges use SPC WCM archive (not daily CSVs that only cover ~last month)
+- Widget: do not allow resize below declared minimum size (avoids clipped sunset/period strip on tiny cells)
+
+### Added
+
+- Severe Weather: one combined reports list (Alert / Tropical / Tornado) with clear type badges
+- Reverse-geocode of WCM tornado coordinates to nearby place names (Nominatim, rate-limited)
+- Hazard explore distance chips: **50m / 100m / 250m / 500m / Custom** (miles); custom field clears on focus
+- Custom history date picker opens with a blank selection
+
+### Changed
+
+- History window header layout so long custom date badges do not crush help text
+
 ## [1.1.6] — 2026-08-16
 
 ### Fixed

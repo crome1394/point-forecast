@@ -123,8 +123,16 @@ fun HourlyScreen(
     spaceWeather: SpaceWeatherService.Snapshot? = null,
     /** Order + enable flags for every hourly tab. */
     tabConfig: List<HourlyTabConfigItem> = emptyList(),
+    /**
+     * Forecast-location timezone (IANA / GMT±). When set, row labels use station
+     * time like the forecast card and Sun/Moon — not the device zone.
+     */
+    timeZoneId: String? = null,
 ) {
     val hasLocalHourly = hourly.isNotEmpty()
+    val stationTz = remember(timeZoneId) {
+        timeZoneId?.let { TimeZone.getTimeZone(it) } ?: TimeZone.getDefault()
+    }
     val tabs = remember(tabConfig, hasLocalHourly, spaceWeather) {
         val orderedIds = if (tabConfig.isEmpty()) {
             HourlyTab.entries.map { it.name }
@@ -147,11 +155,13 @@ fun HourlyScreen(
         hourly,
         tabs,
         spaceWeather,
+        stationTz,
     ) {
         buildTabModels(
             hourly = hourly,
             tabs = tabs,
             spaceWeather = spaceWeather,
+            timeZone = stationTz,
         )
     }
     Column(
@@ -357,9 +367,10 @@ private fun buildTabModels(
     hourly: List<HourlyRow>,
     tabs: List<HourlyTab>,
     spaceWeather: SpaceWeatherService.Snapshot? = null,
+    timeZone: TimeZone = TimeZone.getDefault(),
 ): List<TabModel> {
     if (tabs.isEmpty()) return emptyList()
-    val times = hourly.map { formatTimeLabel(it) }
+    val times = hourly.map { formatTimeLabel(it, timeZone) }
     return tabs.mapNotNull { tab ->
         buildTabModel(tab, hourly, times, spaceWeather)
     }
@@ -724,14 +735,18 @@ private fun HourlyTable(
     }
 }
 
-private fun formatTimeLabel(row: HourlyRow): String {
+private fun formatTimeLabel(
+    row: HourlyRow,
+    timeZone: TimeZone = TimeZone.getDefault(),
+): String {
     val epoch = row.epochSec
     if (epoch != null) {
         val date = Date(epoch * 1000L)
         val dayFmt = SimpleDateFormat("EEE M/d", Locale.US)
         val timeFmt = SimpleDateFormat("h a", Locale.US)
-        dayFmt.timeZone = TimeZone.getDefault()
-        timeFmt.timeZone = TimeZone.getDefault()
+        // Station / forecast-location zone (matches card + Sun/Moon), not device zone.
+        dayFmt.timeZone = timeZone
+        timeFmt.timeZone = timeZone
         return "${dayFmt.format(date)}\n${timeFmt.format(date)}"
     }
     val head = row.periodLabel

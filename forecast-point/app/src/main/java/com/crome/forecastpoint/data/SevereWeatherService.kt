@@ -690,7 +690,7 @@ class SevereWeatherService(
         /** Practical max look-back (SPC WCM tornado archive: 1950–present; 20y is well covered). */
         const val MAX_HISTORY_DAYS = 7300 // 20 years
         private const val USER_AGENT =
-            "PointForecast/1.1.6 (Android; open-source; https://github.com/crome1394/point-forecast)"
+            "PointForecast/1.1.7 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

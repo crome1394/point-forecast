@@ -566,6 +566,7 @@ class MainActivity : ComponentActivity() {
                                         tideInfo = snapshot?.tideInfo,
                                         spaceWeather = spaceWeather,
                                         tabConfig = hourlyTabConfig,
+                                        timeZoneId = snapshot?.timeZoneId,
                                     )
                                 }
                                 AppScreen.Search -> SearchScreen(
