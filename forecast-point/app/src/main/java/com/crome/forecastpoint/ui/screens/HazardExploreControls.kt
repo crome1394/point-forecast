@@ -222,33 +222,32 @@ fun HazardLoadingBanner(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier.fillMaxWidth(),
         color = SurfaceDark,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(0.dp),
+        shadowElevation = 4.dp,
     ) {
         Row(
             Modifier
                 .background(
                     Brush.horizontalGradient(
-                        listOf(accent.copy(alpha = 0.18f), Color.Transparent),
+                        listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.08f)),
                     ),
                 )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
                 color = accent,
-                strokeWidth = 2.dp,
+                strokeWidth = 2.5.dp,
             )
             Text(
                 message,
                 color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }

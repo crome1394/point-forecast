@@ -106,6 +106,7 @@ import kotlin.math.roundToInt
 import com.crome.forecastpoint.ui.screens.AboutScreen
 import com.crome.forecastpoint.ui.screens.CelestialBody
 import com.crome.forecastpoint.ui.screens.ForecastScreen
+import com.crome.forecastpoint.ui.screens.HazardLoadingBanner
 import com.crome.forecastpoint.ui.screens.HourlyScreen
 import com.crome.forecastpoint.ui.screens.MapScreen
 import com.crome.forecastpoint.ui.screens.SearchScreen
@@ -537,11 +538,46 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                     ) { padding ->
-                        Box(
+                        val hazardLoading = screen == AppScreen.SunMoon && when (sunMoonBody) {
+                            CelestialBody.Earthquakes -> earthquakesLoading
+                            CelestialBody.Storms -> severeWeatherLoading
+                            else -> false
+                        }
+                        val hazardLoadingMessage = when (sunMoonBody) {
+                            CelestialBody.Earthquakes ->
+                                if (earthquakes == null) {
+                                    "Loading earthquakes…"
+                                } else {
+                                    "Updating earthquakes (longer history can take a bit)…"
+                                }
+                            CelestialBody.Storms ->
+                                if (severeWeather == null) {
+                                    "Loading severe weather…"
+                                } else {
+                                    "Updating severe weather (longer history can take a bit)…"
+                                }
+                            else -> ""
+                        }
+                        val hazardLoadingAccent = when (sunMoonBody) {
+                            CelestialBody.Earthquakes -> Color(0xFFFF8A65)
+                            CelestialBody.Storms -> Color(0xFFFF7043)
+                            else -> PrimaryBlue
+                        }
+
+                        Column(
                             Modifier
                                 .fillMaxSize()
                                 .padding(padding),
                         ) {
+                            // Sticky under top title bar so long SPC/USGS fetches stay obvious
+                            if (hazardLoading && !titleBarAtBottom) {
+                                HazardLoadingBanner(
+                                    message = hazardLoadingMessage,
+                                    accent = hazardLoadingAccent,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
                             when (screen) {
                                 AppScreen.Forecast -> ForecastScreen(
                                     snapshot = snapshot,
@@ -683,6 +719,15 @@ class MainActivity : ComponentActivity() {
                                     onResolveTornadoPlace = { lat, lon ->
                                         viewModel.reverseGeocode(lat, lon).name
                                     },
+                                )
+                            }
+                            }
+                            // Sticky above bottom title bar
+                            if (hazardLoading && titleBarAtBottom) {
+                                HazardLoadingBanner(
+                                    message = hazardLoadingMessage,
+                                    accent = hazardLoadingAccent,
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }

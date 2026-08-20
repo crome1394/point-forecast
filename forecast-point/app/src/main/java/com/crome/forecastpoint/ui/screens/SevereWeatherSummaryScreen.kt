@@ -230,16 +230,7 @@ fun SevereWeatherSummaryScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        if (loading) {
-            HazardLoadingBanner(
-                message = if (snapshot == null) {
-                    "Loading severe weather…"
-                } else {
-                    "Updating severe weather…"
-                },
-                accent = StormAccent,
-            )
-        }
+        // Loading strip is shown sticky under/above the app title bar (MainActivity).
 
         if (loading && snapshot == null) {
             CircularProgressIndicator(

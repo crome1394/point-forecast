@@ -190,16 +190,7 @@ fun EarthquakeSummaryScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        if (loading) {
-            HazardLoadingBanner(
-                message = if (snapshot == null) {
-                    "Loading earthquakes…"
-                } else {
-                    "Updating earthquakes…"
-                },
-                accent = QuakeAccent,
-            )
-        }
+        // Loading strip is shown sticky under/above the app title bar (MainActivity).
 
         if (loading && snapshot == null) {
             CircularProgressIndicator(
