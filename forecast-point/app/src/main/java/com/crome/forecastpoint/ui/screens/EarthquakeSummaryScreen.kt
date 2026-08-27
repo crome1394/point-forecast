@@ -58,11 +58,8 @@ import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
 import com.crome.forecastpoint.util.MapHelpers
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import com.crome.forecastpoint.util.MapTiles
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -73,29 +70,6 @@ import java.util.TimeZone
 import kotlin.math.roundToInt
 
 private val QuakeAccent = Color(0xFFFF8A65)
-
-/** Light basemap for readable labels / roads on hazard maps. */
-private val CartoLightTiles: OnlineTileSourceBase = object : XYTileSource(
-    "CartoPositronQuake",
-    1,
-    18,
-    256,
-    ".png",
-    arrayOf(
-        "https://a.basemaps.cartocdn.com/light_all/",
-        "https://b.basemaps.cartocdn.com/light_all/",
-        "https://c.basemaps.cartocdn.com/light_all/",
-        "https://d.basemaps.cartocdn.com/light_all/",
-    ),
-    "© OpenStreetMap © CARTO",
-) {
-    override fun getTileURLString(pMapTileIndex: Long): String {
-        return baseUrl +
-            MapTileIndex.getZoom(pMapTileIndex) + "/" +
-            MapTileIndex.getX(pMapTileIndex) + "/" +
-            MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
-    }
-}
 
 @Composable
 fun EarthquakeSummaryScreen(
@@ -489,11 +463,9 @@ private fun EarthquakeMap(
 ) {
     val context = LocalContext.current
     val mapView = remember {
-        Configuration.getInstance().userAgentValue = context.packageName
-        Configuration.getInstance().osmdroidBasePath = context.cacheDir
-        Configuration.getInstance().osmdroidTileCache = context.cacheDir.resolve("osmdroid")
+        MapTiles.configureOsmdroid(context)
         MapView(context).apply {
-            setTileSource(CartoLightTiles)
+            setTileSource(MapTiles.OsmMapnik)
             setMultiTouchControls(true)
             setFlingEnabled(true)
             isTilesScaledToDpi = true

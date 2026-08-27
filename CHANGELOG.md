@@ -7,13 +7,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.1.7] — 2026-08-17
+## [1.1.7] — 2026-08-27
 
 ### Fixed
 
 - Hourly table uses **station / forecast-location** timezone (same as forecast card and Sun/Moon), not the device zone
 - Historical severe-weather custom ranges use SPC WCM archive (not daily CSVs that only cover ~last month)
 - Widget: do not allow resize below declared minimum size (avoids clipped sunset/period strip on tiny cells)
+- Map tiles: switch from CARTO raster CDN (now requires API key / watermarks) to OpenStreetMap standard tiles — no key needed
 
 ### Added
 

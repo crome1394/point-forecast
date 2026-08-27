@@ -26,8 +26,8 @@
         <domain includeSubdomains="true">waterservices.usgs.gov</domain>
         <!-- Maps / geocoding (no Google Play Services) -->
         <domain includeSubdomains="true">openstreetmap.org</domain>
+        <domain includeSubdomains="true">tile.openstreetmap.org</domain>
         <domain includeSubdomains="true">nominatim.openstreetmap.org</domain>
-        <domain includeSubdomains="true">basemaps.cartocdn.com</domain>
         <!-- Optional hourly extras -->
         <domain includeSubdomains="true">open-meteo.com</domain>
         <domain includeSubdomains="true">api.open-meteo.com</domain>

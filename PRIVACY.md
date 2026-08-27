@@ -38,7 +38,7 @@ When you use the app (or enable auto-refresh), it contacts **public data service
 | Tropical storms | `www.nhc.noaa.gov` |
 | Tornado reports | `www.spc.noaa.gov` |
 | Optional hourly extras | `api.open-meteo.com`, `air-quality-api.open-meteo.com` |
-| Map tiles | `*.basemaps.cartocdn.com` (OpenStreetMap / CARTO) |
+| Map tiles | `tile.openstreetmap.org` (OpenStreetMap) |
 | Geocoding | `nominatim.openstreetmap.org` |
 
 Those operators may log standard HTTP access (IP, User-Agent, path) under **their** policies. Point Forecast sends a clear open-source User-Agent identifying the app.

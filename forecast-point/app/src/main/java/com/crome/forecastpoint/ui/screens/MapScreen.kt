@@ -78,40 +78,14 @@ import com.crome.forecastpoint.util.MapHelpers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.ScaleBarOverlay
-
-/** Clean light basemap — fewer visual elements, readable place names. */
-private val CartoLightTiles: OnlineTileSourceBase = object : XYTileSource(
-    "CartoPositron",
-    1,
-    18,
-    256,
-    ".png",
-    arrayOf(
-        "https://a.basemaps.cartocdn.com/light_all/",
-        "https://b.basemaps.cartocdn.com/light_all/",
-        "https://c.basemaps.cartocdn.com/light_all/",
-        "https://d.basemaps.cartocdn.com/light_all/",
-    ),
-    "© OpenStreetMap © CARTO",
-) {
-    override fun getTileURLString(pMapTileIndex: Long): String {
-        return baseUrl +
-            MapTileIndex.getZoom(pMapTileIndex) + "/" +
-            MapTileIndex.getX(pMapTileIndex) + "/" +
-            MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
-    }
-}
+import com.crome.forecastpoint.util.MapTiles
 
 /**
  * Map picker:
@@ -714,12 +688,10 @@ private fun createMapView(
     lon: Double,
     zoom: Double,
 ): MapView {
-    Configuration.getInstance().userAgentValue = context.packageName
-    Configuration.getInstance().osmdroidBasePath = context.cacheDir
-    Configuration.getInstance().osmdroidTileCache = context.cacheDir.resolve("osmdroid")
+    MapTiles.configureOsmdroid(context)
 
     return MapView(context).apply {
-        setTileSource(CartoLightTiles)
+        setTileSource(MapTiles.OsmMapnik)
         // Pinch-to-zoom on; single-finger pan is default
         setMultiTouchControls(true)
         setFlingEnabled(true)
