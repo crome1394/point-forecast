@@ -17,7 +17,7 @@ import org.osmdroid.util.MapTileIndex
 object MapTiles {
     /** Meaningful User-Agent for OSM tile / Nominatim etiquette. */
     const val USER_AGENT =
-        "PointForecast/1.1.8 (Android; https://github.com/crome1394/point-forecast)"
+        "PointForecast/1.1.9 (Android; https://github.com/crome1394/point-forecast)"
 
     val OsmMapnik: OnlineTileSourceBase = object : XYTileSource(
         "Mapnik",

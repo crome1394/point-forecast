@@ -1,0 +1,5 @@
+IMPORTANT for existing F-Droid users: this release uses a new developer signing key. Uninstall Point Forecast once, then reinstall from F-Droid (or GitHub). Android cannot update across different signatures.
+
+After reinstalling, F-Droid and GitHub builds can update each other normally.
+
+Also includes reproducible upstream-signed release tooling for F-Droid.

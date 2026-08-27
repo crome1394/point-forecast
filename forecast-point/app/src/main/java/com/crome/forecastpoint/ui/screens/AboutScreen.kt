@@ -66,6 +66,15 @@ fun AboutScreen() {
             fontSize = 13.sp,
         )
         Text(
+            "Updates (F-Droid)\n" +
+                "From 1.1.9 onward, F-Droid publishes the same developer-signed APK as GitHub. " +
+                "If you installed an older F-Droid build (before that switch), uninstall once and " +
+                "reinstall — Android cannot update across different signing keys.",
+            color = OnSurfaceMuted,
+            modifier = Modifier.padding(top = 16.dp),
+            fontSize = 13.sp,
+        )
+        Text(
             "Source code",
             color = Color.White,
             fontWeight = FontWeight.SemiBold,

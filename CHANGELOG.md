@@ -7,6 +7,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.9] — 2026-08-27
+
+### Changed
+
+- **F-Droid signing:** releases are now **developer-signed** (reproducible upstream builds). If you installed an earlier build from F-Droid, **uninstall once and reinstall** from F-Droid (or GitHub) — Android will not update across different signing keys. After that, F-Droid and GitHub APKs share the same signature.
+- Release tooling for reproducible upstream-signed builds (Build Tools 34 `apksigner`, `app-release-signed.apk` contract)
+
 ## [1.1.8] — 2026-08-27
 
 ### Fixed
