@@ -59,7 +59,7 @@ Signed store / F-Droid builds: see [RELEASE.md](RELEASE.md) and [CHANGELOG.md](C
 | Language | Kotlin |
 | UI | Jetpack Compose |
 | Min / target SDK | 26 / 35 |
-| Maps | osmdroid + OSM / CARTO (no Google Play Services) |
+| Maps | osmdroid + OpenStreetMap tiles (no Google Play Services) |
 
 ## Data sources
 
@@ -71,7 +71,7 @@ Signed store / F-Droid builds: see [RELEASE.md](RELEASE.md) and [CHANGELOG.md](C
 | Earthquakes | USGS Earthquake Hazards Program (FDSN) |
 | Severe weather (tornadoes / tropical) | NOAA SPC storm reports + WCM archive; NHC CurrentStorms; NWS CAP alerts |
 | Air quality, UV, pressure | [Open-Meteo](https://open-meteo.com/) (optional extras) |
-| Search / map | OpenStreetMap Nominatim, osmdroid, CARTO |
+| Search / map | OpenStreetMap Nominatim, osmdroid + OSM tiles |
 
 Coverage for core forecast is **U.S. NWS points**. Use APIs politely (clear User-Agent, caching).
 

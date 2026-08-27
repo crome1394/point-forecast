@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.data.EarthquakeService
+import com.crome.forecastpoint.data.SavedLocation
 import com.crome.forecastpoint.data.SevereWeatherService
 import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
@@ -108,6 +109,10 @@ fun SunMoonScreen(
     mapFocusRadiusMiles: Int = 250,
     hazardHistoryDays: Int = 7,
     onEnsureSpaceWeather: (() -> Unit)? = null,
+    /** Reverse-geocode lat/lon → place name for historical tornado rows. */
+    onResolveTornadoPlace: (suspend (lat: Double, lon: Double) -> String)? = null,
+    favorites: List<SavedLocation> = emptyList(),
+    onSelectHazardCity: (SavedLocation) -> Unit = {},
 ) {
     if (body == CelestialBody.SpaceWeather) {
         LaunchedEffect(Unit) { onEnsureSpaceWeather?.invoke() }
@@ -129,6 +134,8 @@ fun SunMoonScreen(
             settingsDefaultRadiusMiles = mapFocusRadiusMiles,
             settingsDefaultHistoryDays = hazardHistoryDays,
             onExploreParams = { r, d, s, e -> onEnsureEarthquakes?.invoke(r, d, s, e) },
+            favorites = favorites,
+            onSelectCity = onSelectHazardCity,
         )
         return
     }
@@ -142,6 +149,9 @@ fun SunMoonScreen(
             settingsDefaultRadiusMiles = mapFocusRadiusMiles,
             settingsDefaultHistoryDays = hazardHistoryDays,
             onExploreParams = { r, d, s, e -> onEnsureSevereWeather?.invoke(r, d, s, e) },
+            onResolvePlace = onResolveTornadoPlace,
+            favorites = favorites,
+            onSelectCity = onSelectHazardCity,
         )
         return
     }

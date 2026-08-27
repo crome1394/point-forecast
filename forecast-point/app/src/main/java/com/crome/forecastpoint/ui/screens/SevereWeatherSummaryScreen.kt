@@ -18,14 +18,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Thunderstorm
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +39,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,16 +53,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.crome.forecastpoint.R
 import com.crome.forecastpoint.data.PreferencesRepository
+import com.crome.forecastpoint.data.SavedLocation
 import com.crome.forecastpoint.data.SevereWeatherService
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
 import com.crome.forecastpoint.util.MapHelpers
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import com.crome.forecastpoint.util.MapTiles
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -72,29 +69,6 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private val StormAccent = Color(0xFFFF7043)
-
-/** Light basemap for readable labels / roads on hazard maps. */
-private val CartoLightTiles: OnlineTileSourceBase = object : XYTileSource(
-    "CartoPositronStorms",
-    1,
-    18,
-    256,
-    ".png",
-    arrayOf(
-        "https://a.basemaps.cartocdn.com/light_all/",
-        "https://b.basemaps.cartocdn.com/light_all/",
-        "https://c.basemaps.cartocdn.com/light_all/",
-        "https://d.basemaps.cartocdn.com/light_all/",
-    ),
-    "© OpenStreetMap © CARTO",
-) {
-    override fun getTileURLString(pMapTileIndex: Long): String {
-        return baseUrl +
-            MapTileIndex.getZoom(pMapTileIndex) + "/" +
-            MapTileIndex.getX(pMapTileIndex) + "/" +
-            MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
-    }
-}
 
 @Composable
 fun SevereWeatherSummaryScreen(
@@ -111,10 +85,20 @@ fun SevereWeatherSummaryScreen(
         historyStartMs: Long?,
         historyEndMs: Long?,
     ) -> Unit = { _, _, _, _ -> },
+    /**
+     * Optional reverse-geocode (e.g. Nominatim) for WCM tornado rows that only have lat/lon.
+     * Called at most ~1/sec to respect OSM usage policy.
+     */
+    onResolvePlace: (suspend (lat: Double, lon: Double) -> String)? = null,
+    favorites: List<SavedLocation> = emptyList(),
+    onSelectCity: (SavedLocation) -> Unit = {},
 ) {
     var aboutExpanded by remember { mutableStateOf(false) }
     var settingsExpanded by remember { mutableStateOf(false) }
     var mapFullscreen by remember { mutableStateOf(false) }
+    val cityOptions = remember(favorites, latitude, longitude, locationName) {
+        hazardCityOptions(favorites, latitude, longitude, locationName)
+    }
     var exploreRadius by remember(settingsDefaultRadiusMiles) {
         mutableIntStateOf(settingsDefaultRadiusMiles)
     }
@@ -158,8 +142,36 @@ fun SevereWeatherSummaryScreen(
             .orEmpty()
     }
 
+    // Resolve city/town names for coordinate-only WCM rows (Nominatim, rate-limited).
+    var resolvedPlaces by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(filteredTornadoes, onResolvePlace) {
+        val resolve = onResolvePlace ?: return@LaunchedEffect
+        val pending = filteredTornadoes.filter { r ->
+            r.locationIsCoordinate && !resolvedPlaces.containsKey(r.id)
+        }
+        for (r in pending) {
+            val cacheKey = placeCacheKey(r.latitude, r.longitude)
+            val cached = tornadoPlaceCache[cacheKey]
+            if (cached != null) {
+                resolvedPlaces = resolvedPlaces + (r.id to cached)
+                continue
+            }
+            val name = runCatching { resolve(r.latitude, r.longitude) }.getOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            if (name != null) {
+                tornadoPlaceCache[cacheKey] = name
+                resolvedPlaces = resolvedPlaces + (r.id to name)
+            }
+            // Nominatim policy: max 1 request/second
+            delay(1_100)
+        }
+    }
+
     val historySummary = if (customRangeActive && customStartMs != null && customEndMs != null) {
-        val fmt = SimpleDateFormat("MMM d", Locale.US)
+        val fmt = SimpleDateFormat("MMM d", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
         "${fmt.format(java.util.Date(customStartMs!!))}–${fmt.format(java.util.Date(customEndMs!!))}"
     } else {
         formatHistoryDays(historyDays)
@@ -198,16 +210,7 @@ fun SevereWeatherSummaryScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        if (loading) {
-            HazardLoadingBanner(
-                message = if (snapshot == null) {
-                    "Loading severe weather…"
-                } else {
-                    "Updating severe weather…"
-                },
-                accent = StormAccent,
-            )
-        }
+        // Loading strip is shown sticky under/above the app title bar (MainActivity).
 
         if (loading && snapshot == null) {
             CircularProgressIndicator(
@@ -284,6 +287,15 @@ fun SevereWeatherSummaryScreen(
             summary = settingsSummary,
             onReset = { resetHazardSettings() },
         ) {
+            HazardCityPickerCard(
+                cities = cityOptions,
+                selectedLatitude = latitude,
+                selectedLongitude = longitude,
+                selectedName = locationName,
+                onSelectCity = onSelectCity,
+                accent = StormAccent,
+                compact = true,
+            )
             HazardExploreRadiusCard(
                 exploreRadiusMiles = exploreRadius,
                 settingsDefaultMiles = settingsDefaultRadiusMiles,
@@ -353,213 +365,28 @@ fun SevereWeatherSummaryScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Local alerts
-        Surface(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            color = SurfaceDark,
-            shape = RoundedCornerShape(16.dp),
+        // One combined list (alerts + tropical + tornado), like Earthquake reports.
+        val combinedReports = remember(
+            snapshot,
+            filteredStorms,
+            filteredTornadoes,
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, null, tint = Color(0xFFFF7043), modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Local watches & warnings", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text("NWS alerts for this point (tornado / tropical)", color = OnSurfaceMuted, fontSize = 12.sp)
-                    }
-                }
-                val alerts = snapshot?.localAlerts.orEmpty()
-                if (alerts.isEmpty()) {
-                    Text(
-                        "No active tornado or tropical alerts for this location right now.",
-                        color = OnSurfaceMuted,
-                        fontSize = 13.sp,
-                    )
-                } else {
-                    alerts.forEach { a ->
-                        Column(Modifier.padding(vertical = 4.dp)) {
-                            Text(a.event, color = Color(0xFFFFAB91), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Text(a.headline, color = Color.White, fontSize = 13.sp)
-                            if (a.areaDesc.isNotBlank()) {
-                                Text(a.areaDesc, color = OnSurfaceMuted, fontSize = 12.sp)
-                            }
-                            Text(
-                                "Severity: ${a.severity}",
-                                color = OnSurfaceMuted,
-                                fontSize = 11.sp,
-                            )
-                        }
-                    }
-                }
-            }
+            buildCombinedSevereReports(
+                alerts = snapshot?.localAlerts.orEmpty(),
+                storms = filteredStorms,
+                tornadoes = filteredTornadoes,
+            )
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        // Active tropical cyclones
-        Surface(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            color = SurfaceDark,
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Air, null, tint = Color(0xFF4FC3F7), modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Active tropical cyclones", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "National Hurricane Center · within $exploreRadius mi · ${tropicalLabel(minWindKt.roundToInt())}",
-                            color = OnSurfaceMuted,
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-                if (filteredStorms.isEmpty()) {
-                    Text(
-                        "No active tropical cyclones within $exploreRadius mi at this strength filter. " +
-                            "Widen explore distance or lower tropical strength.",
-                        color = OnSurfaceMuted,
-                        fontSize = 13.sp,
-                    )
-                } else {
-                    filteredStorms.forEach { s ->
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = s.advisoryUrl != null) {
-                                    s.advisoryUrl?.let { uriHandler.openUri(it) }
-                                }
-                                .padding(vertical = 6.dp),
-                        ) {
-                            Text(
-                                "${s.name} (${s.classification})",
-                                color = Color(0xFF81D4FA),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp,
-                            )
-                            val wind = s.intensityKt?.let { "$it kt" } ?: "—"
-                            val mb = s.pressureMb?.let { "$it mb" } ?: "—"
-                            Text(
-                                "Winds $wind · Pressure $mb · ${"%.0f".format(Locale.US, s.distanceMiles)} mi from city",
-                                color = Color.White,
-                                fontSize = 13.sp,
-                            )
-                            val move = buildString {
-                                s.movementDir?.let { append("Moving $it°") }
-                                s.movementSpeedKt?.let {
-                                    if (isNotEmpty()) append(" at ")
-                                    append("$it kt")
-                                }
-                            }
-                            if (move.isNotBlank()) {
-                                Text(move, color = OnSurfaceMuted, fontSize = 12.sp)
-                            }
-                            s.lastUpdate?.let {
-                                Text("Updated $it", color = OnSurfaceMuted, fontSize = 11.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // SPC tornado reports
-        Surface(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            color = SurfaceDark,
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Thunderstorm, null, tint = Color(0xFFE57373), modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Severe weather reports", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Storm Prediction Center · $historySummary · " +
-                                "within $exploreRadius mi · ${tornadoLabel(minTornadoEf.roundToInt())} · newest first",
-                            color = OnSurfaceMuted,
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-                if (filteredTornadoes.isEmpty()) {
-                    Text(
-                        "No severe weather reports within $exploreRadius mi matching this category filter.",
-                        color = OnSurfaceMuted,
-                        fontSize = 13.sp,
-                    )
-                } else {
-                    Row(Modifier.fillMaxWidth()) {
-                        Text("EF", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(36.dp))
-                        Text("Report", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                        Text("Mi", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(36.dp))
-                    }
-                    filteredTornadoes.forEach { r ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = r.detailUrl != null) {
-                                    r.detailUrl?.let { uriHandler.openUri(it) }
-                                }
-                                .padding(vertical = 5.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Text(
-                                r.fScale,
-                                color = Color(0xFFFFAB91),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                modifier = Modifier.width(36.dp),
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    buildString {
-                                        append(r.location)
-                                        if (r.state.isNotBlank() && !r.location.contains(r.state)) {
-                                            append(", ")
-                                            append(r.state)
-                                        }
-                                    },
-                                    color = if (r.detailUrl != null) Color(0xFF81D4FA) else Color.White,
-                                    fontSize = 13.sp,
-                                )
-                                Text(
-                                    buildString {
-                                        if (r.county.isNotBlank()) {
-                                            append(r.county)
-                                            append(" · ")
-                                        }
-                                        append("UTC ${r.timeLabel}")
-                                        if (r.detailUrl != null) append(" · tap for SPC details")
-                                    },
-                                    color = OnSurfaceMuted,
-                                    fontSize = 11.sp,
-                                )
-                                if (r.comments.isNotBlank()) {
-                                    Text(r.comments, color = Color(0xFFB0BEC5), fontSize = 11.sp, maxLines = 2)
-                                }
-                            }
-                            Text(
-                                String.format(Locale.US, "%.0f", r.distanceMiles),
-                                color = OnSurfaceMuted,
-                                fontSize = 13.sp,
-                                modifier = Modifier.width(36.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        SevereReportsSection(
+            subtitle = "NWS · NHC · SPC · $historySummary · within $exploreRadius mi · " +
+                "${tropicalLabel(minWindKt.roundToInt())} · ${tornadoLabel(minTornadoEf.roundToInt())}",
+            reports = combinedReports,
+            resolvedPlaces = resolvedPlaces,
+            emptyMessage = "No watches, tropical cyclones, or tornado reports match these filters " +
+                "within $exploreRadius mi.",
+            onOpenUrl = { uriHandler.openUri(it) },
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -589,33 +416,24 @@ fun SevereWeatherSummaryScreen(
                 AnimatedVisibility(visible = aboutExpanded) {
                     Text(
                         "Data sources (official U.S. government)\n" +
-                            "• National Hurricane Center (NHC) — active tropical cyclones worldwide in " +
-                            "NOAA basins (Atlantic, Eastern Pacific, Central Pacific).\n" +
-                            "• National Weather Service (NWS) — watches and warnings for your city " +
-                            "(tornado, hurricane, tropical storm, storm surge).\n" +
-                            "• Storm Prediction Center (SPC) — preliminary tornado reports for your " +
-                            "history window (not a forecast).\n\n" +
+                            "• National Hurricane Center (NHC) — active tropical cyclones.\n" +
+                            "• National Weather Service (NWS) — watches/warnings for this point.\n" +
+                            "• Storm Prediction Center (SPC) — tornado reports in your history window.\n\n" +
                             "Screen layout\n" +
-                            "• Local watches & warnings — NWS alerts for this point.\n" +
-                            "• Active tropical cyclones — current NHC systems in your explore radius.\n" +
-                            "• Severe weather reports — SPC tornado reports in your history window. " +
-                            "Tap a row for that day’s official SPC storm-reports page.\n" +
-                            "  Short windows use daily preliminary reports; longer windows " +
-                            "(over 30 days) use official yearly tornado archives.\n\n" +
+                            "• Severe weather reports — one list mixing:\n" +
+                            "  – Alert — active NWS watch/warning at this city\n" +
+                            "  – Tropical — active NHC cyclone in explore distance\n" +
+                            "  – Tornado / EF# — SPC tornado report (tap for daily page)\n" +
+                            "  Historical WCM rows start as coordinates; the app looks up a nearby " +
+                            "city/town via OpenStreetMap (Nominatim) when online.\n" +
+                            "  Recent windows use daily CSVs; older/custom ranges use WCM archives.\n\n" +
                             "Terms & scales\n" +
-                            "• kt (knots) — wind speed. About 1.15 mph. Tropical storm ≈ 34+ kt; " +
-                            "hurricane ≈ 64+ kt; major hurricane ≈ 96+ kt.\n" +
-                            "• mb (millibars) — air pressure at the storm center (lower often means stronger).\n" +
-                            "• EF scale (Enhanced Fujita) — tornado damage rating from EF0 (weak) " +
-                            "to EF5 (violent). UNK means rating not assigned yet.\n" +
-                            "• mi — miles from your selected city (straight-line).\n" +
-                            "• CAP — Common Alerting Protocol; how NWS publishes machine-readable alerts.\n\n" +
-                            "Settings on this screen\n" +
-                            "Explore distance, history window, and filters are temporary. They do not " +
-                            "change Settings → Map focus radius or Hazard history defaults.\n\n" +
+                            "• kt (knots) — wind speed (~1.15 mph). TS ≈ 34+ kt; hurricane ≈ 64+ kt.\n" +
+                            "• EF scale — tornado damage EF0–EF5 (UNK = not rated yet).\n" +
+                            "• mi — miles from your selected city (straight-line).\n\n" +
+                            "Settings on this screen are temporary (do not change app Settings defaults).\n\n" +
                             "Limits\n" +
-                            "SPC reports are preliminary and can be revised. This is not a substitute " +
-                            "for official NWS warnings — always heed local alerts.",
+                            "SPC reports can be revised. This is not a substitute for official NWS warnings.",
                         color = Color(0xFFCFD8DC),
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
@@ -624,6 +442,290 @@ fun SevereWeatherSummaryScreen(
                 }
             }
         }
+    }
+}
+
+/** One row in the combined severe-weather list. */
+private sealed class SevereListItem {
+    abstract val sortKey: Long
+    abstract val distanceMiles: Double?
+
+    data class Alert(
+        val data: SevereWeatherService.ActiveAlert,
+    ) : SevereListItem() {
+        // Active alerts always sort to the top.
+        override val sortKey: Long get() = Long.MAX_VALUE
+        override val distanceMiles: Double? get() = null
+    }
+
+    data class Tropical(
+        val data: SevereWeatherService.TropicalStorm,
+    ) : SevereListItem() {
+        override val sortKey: Long get() = Long.MAX_VALUE - 1
+        override val distanceMiles: Double get() = data.distanceMiles
+    }
+
+    data class Tornado(
+        val data: SevereWeatherService.TornadoReport,
+    ) : SevereListItem() {
+        override val sortKey: Long get() = data.epochMs
+        override val distanceMiles: Double get() = data.distanceMiles
+    }
+}
+
+private fun buildCombinedSevereReports(
+    alerts: List<SevereWeatherService.ActiveAlert>,
+    storms: List<SevereWeatherService.TropicalStorm>,
+    tornadoes: List<SevereWeatherService.TornadoReport>,
+): List<SevereListItem> {
+    val items = ArrayList<SevereListItem>(alerts.size + storms.size + tornadoes.size)
+    alerts.forEach { items += SevereListItem.Alert(it) }
+    storms.forEach { items += SevereListItem.Tropical(it) }
+    tornadoes.forEach { items += SevereListItem.Tornado(it) }
+    // Alerts & tropical first, then tornadoes newest-first.
+    return items.sortedWith(
+        compareByDescending<SevereListItem> { it.sortKey }
+            .thenBy { it.distanceMiles ?: 0.0 },
+    )
+}
+
+/** Session cache so reopening the same WCM points does not re-hit Nominatim. */
+private val tornadoPlaceCache = mutableMapOf<String, String>()
+
+private fun placeCacheKey(lat: Double, lon: Double): String =
+    String.format(Locale.US, "%.3f,%.3f", lat, lon)
+
+@Composable
+private fun SevereReportsSection(
+    subtitle: String,
+    reports: List<SevereListItem>,
+    resolvedPlaces: Map<String, String>,
+    emptyMessage: String,
+    onOpenUrl: (String) -> Unit,
+) {
+    Surface(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        color = SurfaceDark,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Thunderstorm,
+                    null,
+                    tint = Color(0xFFE57373),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(
+                        "Severe weather reports",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(subtitle, color = OnSurfaceMuted, fontSize = 12.sp)
+                }
+            }
+            if (reports.isEmpty()) {
+                Text(emptyMessage, color = OnSurfaceMuted, fontSize = 13.sp)
+            } else {
+                Row(Modifier.fillMaxWidth()) {
+                    Text("Type", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(56.dp))
+                    Text("Report", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("Mi", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(36.dp))
+                }
+                reports.forEach { item ->
+                    when (item) {
+                        is SevereListItem.Alert -> AlertReportRow(item.data)
+                        is SevereListItem.Tropical -> TropicalReportRow(item.data, onOpenUrl)
+                        is SevereListItem.Tornado -> TornadoReportRow(
+                            r = item.data,
+                            resolvedPlace = resolvedPlaces[item.data.id],
+                            onOpenUrl = onOpenUrl,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TypeBadge(label: String, color: Color) {
+    Text(
+        label,
+        color = color,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        modifier = Modifier.width(56.dp),
+    )
+}
+
+@Composable
+private fun AlertReportRow(a: SevereWeatherService.ActiveAlert) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        TypeBadge("Alert", Color(0xFFFFAB91))
+        Column(Modifier.weight(1f)) {
+            Text(
+                a.event,
+                color = Color(0xFFFFAB91),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+            )
+            Text(a.headline, color = Color.White, fontSize = 13.sp)
+            if (a.areaDesc.isNotBlank()) {
+                Text(a.areaDesc, color = OnSurfaceMuted, fontSize = 12.sp, maxLines = 2)
+            }
+            Text(
+                "NWS watch/warning · Severity: ${a.severity}",
+                color = OnSurfaceMuted,
+                fontSize = 11.sp,
+            )
+        }
+        Text("—", color = OnSurfaceMuted, fontSize = 13.sp, modifier = Modifier.width(36.dp))
+    }
+}
+
+@Composable
+private fun TropicalReportRow(
+    s: SevereWeatherService.TropicalStorm,
+    onOpenUrl: (String) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = s.advisoryUrl != null) {
+                s.advisoryUrl?.let { onOpenUrl(it) }
+            }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        TypeBadge("Trop", Color(0xFF4FC3F7))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "${s.name} · ${s.classification}",
+                color = Color(0xFF81D4FA),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+            )
+            val wind = s.intensityKt?.let { "$it kt" } ?: "—"
+            val mb = s.pressureMb?.let { "$it mb" } ?: "—"
+            Text(
+                "Active tropical cyclone · Winds $wind · Pressure $mb",
+                color = Color.White,
+                fontSize = 13.sp,
+            )
+            val move = buildString {
+                s.movementDir?.let { append("Moving $it°") }
+                s.movementSpeedKt?.let {
+                    if (isNotEmpty()) append(" at ")
+                    append("$it kt")
+                }
+            }
+            if (move.isNotBlank()) {
+                Text(move, color = OnSurfaceMuted, fontSize = 12.sp)
+            }
+            Text(
+                buildString {
+                    append("NHC")
+                    s.lastUpdate?.let { append(" · Updated $it") }
+                    if (s.advisoryUrl != null) append(" · tap for advisory")
+                },
+                color = OnSurfaceMuted,
+                fontSize = 11.sp,
+            )
+        }
+        Text(
+            String.format(Locale.US, "%.0f", s.distanceMiles),
+            color = OnSurfaceMuted,
+            fontSize = 13.sp,
+            modifier = Modifier.width(36.dp),
+        )
+    }
+}
+
+@Composable
+private fun TornadoReportRow(
+    r: SevereWeatherService.TornadoReport,
+    resolvedPlace: String?,
+    onOpenUrl: (String) -> Unit,
+) {
+    val typeLabel = when {
+        r.fScale.uppercase(Locale.US).startsWith("EF") -> r.fScale.uppercase(Locale.US)
+        r.fScale.uppercase(Locale.US).startsWith("F") -> r.fScale.uppercase(Locale.US)
+        else -> "Torn"
+    }
+    val placeLine = when {
+        !resolvedPlace.isNullOrBlank() -> resolvedPlace
+        r.location.isNotBlank() -> r.location
+        else -> "Tornado"
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = r.detailUrl != null) {
+                r.detailUrl?.let { onOpenUrl(it) }
+            }
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        TypeBadge(typeLabel, Color(0xFFFFAB91))
+        Column(Modifier.weight(1f)) {
+            Text(
+                buildString {
+                    append("Tornado")
+                    if (placeLine.isNotBlank()) {
+                        append(" · ")
+                        append(placeLine)
+                    }
+                    if (r.state.isNotBlank() &&
+                        !placeLine.contains(r.state, ignoreCase = true)
+                    ) {
+                        append(" · ")
+                        append(r.state)
+                    }
+                },
+                color = if (r.detailUrl != null) Color(0xFF81D4FA) else Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                buildString {
+                    // Keep coordinates as secondary when we resolved a place name
+                    if (!resolvedPlace.isNullOrBlank() && r.locationIsCoordinate && r.location.isNotBlank()) {
+                        append(r.location)
+                        append(" · ")
+                    }
+                    if (r.county.isNotBlank()) {
+                        append(r.county)
+                        append(" · ")
+                    }
+                    if (r.locationIsCoordinate && resolvedPlace.isNullOrBlank()) {
+                        append("Looking up place… · ")
+                    }
+                    append("UTC ${r.timeLabel}")
+                    if (r.detailUrl != null) append(" · tap for SPC details")
+                },
+                color = OnSurfaceMuted,
+                fontSize = 11.sp,
+            )
+            if (r.comments.isNotBlank()) {
+                Text(r.comments, color = Color(0xFFB0BEC5), fontSize = 11.sp, maxLines = 2)
+            }
+        }
+        Text(
+            String.format(Locale.US, "%.0f", r.distanceMiles),
+            color = OnSurfaceMuted,
+            fontSize = 13.sp,
+            modifier = Modifier.width(36.dp),
+        )
     }
 }
 
@@ -660,11 +762,9 @@ private fun StormMap(
 ) {
     val context = LocalContext.current
     val mapView = remember {
-        Configuration.getInstance().userAgentValue = context.packageName
-        Configuration.getInstance().osmdroidBasePath = context.cacheDir
-        Configuration.getInstance().osmdroidTileCache = context.cacheDir.resolve("osmdroid")
+        MapTiles.configureOsmdroid(context)
         MapView(context).apply {
-            setTileSource(CartoLightTiles)
+            setTileSource(MapTiles.OsmMapnik)
             setMultiTouchControls(true)
             setFlingEnabled(true)
             isTilesScaledToDpi = true

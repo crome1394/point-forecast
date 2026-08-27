@@ -370,7 +370,16 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectFavorite(loc: SavedLocation) {
         viewModelScope.launch {
-            runCatching { repo.selectLocation(loc, fetch = true) }
+            runCatching { repo.selectLocation(loc, fetch = true, saveFavorite = true) }
+        }
+    }
+
+    /** Switch active city from a hazard screen picker (favorites or current non-favorite). */
+    fun selectHazardCity(loc: SavedLocation) {
+        viewModelScope.launch {
+            runCatching {
+                repo.selectLocation(loc, fetch = true, saveFavorite = loc.isFavorite)
+            }
         }
     }
 

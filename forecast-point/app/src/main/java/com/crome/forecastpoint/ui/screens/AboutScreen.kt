@@ -95,7 +95,7 @@ fun AboutScreen() {
                 "• Severe weather: NHC active storms, SPC tornado reports, NWS alerts\n" +
                 "• Space weather: NOAA SWPC\n" +
                 "• Air quality / UV / pressure: Open-Meteo\n" +
-                "• Map tiles: OpenStreetMap / CARTO (via osmdroid)\n" +
+                "• Map tiles: OpenStreetMap (via osmdroid)\n" +
                 "• Geocoding: OpenStreetMap Nominatim\n" +
                 "• Icons: NWS forecast icon set (bundled)",
             color = OnSurfaceMuted,

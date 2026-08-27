@@ -436,8 +436,11 @@ class PreferencesRepository(private val context: Context) {
         val MAP_FOCUS_RADIUS_OPTIONS = listOf(
             50, 100, 150, 250, 400, 500, 750, 1000, 1500, 2000, 3000, 4000,
         )
-        /** Quick chips for ad-hoc explore radius on hazard screens (not Settings). */
-        val MAP_FOCUS_RADIUS_CHIPS = listOf(100, 250, 500, 750, 1000, 2000, 4000)
+        /**
+         * Quick chips for ad-hoc explore radius on hazard screens (not Settings).
+         * A separate **Custom** pill accepts any value in 25–4000 mi.
+         */
+        val MAP_FOCUS_RADIUS_CHIPS = listOf(50, 100, 250, 500)
         /** Default look-back for recent quakes / severe-weather reports. */
         const val DEFAULT_HAZARD_HISTORY_DAYS = 7
         /**

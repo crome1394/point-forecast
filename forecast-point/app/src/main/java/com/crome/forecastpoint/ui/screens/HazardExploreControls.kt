@@ -27,18 +27,30 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberDateRangePickerState
+import com.crome.forecastpoint.data.SavedLocation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,9 +59,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.data.PreferencesRepository
@@ -211,34 +229,172 @@ fun HazardLoadingBanner(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier.fillMaxWidth(),
         color = SurfaceDark,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(0.dp),
+        shadowElevation = 4.dp,
     ) {
         Row(
+            Modifier
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.08f)),
+                    ),
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = accent,
+                strokeWidth = 2.5.dp,
+            )
+            Text(
+                message,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+/** Favorites plus the active city when it is not already saved. */
+fun hazardCityOptions(
+    favorites: List<SavedLocation>,
+    latitude: Double,
+    longitude: Double,
+    locationName: String?,
+): List<SavedLocation> {
+    val options = ArrayList<SavedLocation>(favorites.size + 1)
+    val inFavorites = favorites.any {
+        kotlin.math.abs(it.latitude - latitude) < 0.02 &&
+            kotlin.math.abs(it.longitude - longitude) < 0.02
+    }
+    if (!inFavorites) {
+        val name = locationName?.takeIf { it.isNotBlank() }
+            ?: String.format(java.util.Locale.US, "%.2f, %.2f", latitude, longitude)
+        options += SavedLocation(
+            id = "active-explore",
+            name = name,
+            latitude = latitude,
+            longitude = longitude,
+            isFavorite = false,
+        )
+    }
+    options += favorites
+    return options
+}
+
+/**
+ * City picker for hazard screens. Defaults to the app’s current city; choosing a
+ * favorite updates the active forecast city (Forecast / Hourly stay in sync).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HazardCityPickerCard(
+    cities: List<SavedLocation>,
+    selectedLatitude: Double,
+    selectedLongitude: Double,
+    selectedName: String?,
+    onSelectCity: (SavedLocation) -> Unit,
+    accent: Color,
+    compact: Boolean = true,
+) {
+    if (cities.isEmpty()) return
+
+    val pad = if (compact) 12.dp else 16.dp
+    var expanded by remember { mutableStateOf(false) }
+
+    val selected = remember(cities, selectedLatitude, selectedLongitude, selectedName) {
+        cities.firstOrNull {
+            kotlin.math.abs(it.latitude - selectedLatitude) < 0.02 &&
+                kotlin.math.abs(it.longitude - selectedLongitude) < 0.02
+        } ?: cities.firstOrNull {
+            selectedName != null && it.name.equals(selectedName, ignoreCase = true)
+        }
+    }
+    val label = selected?.name
+        ?: selectedName?.takeIf { it.isNotBlank() }
+        ?: String.format(java.util.Locale.US, "%.2f, %.2f", selectedLatitude, selectedLongitude)
+
+    Surface(
+        Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = if (compact) 8.dp else 16.dp,
+                vertical = if (compact) 4.dp else 6.dp,
+            ),
+        color = if (compact) Color(0xFF1E2A30) else SurfaceDark,
+        shape = RoundedCornerShape(if (compact) 14.dp else 18.dp),
+    ) {
+        Column(
             Modifier
                 .background(
                     Brush.horizontalGradient(
                         listOf(accent.copy(alpha = 0.18f), Color.Transparent),
                     ),
                 )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(pad),
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = accent,
-                strokeWidth = 2.dp,
-            )
-            Text(
-                message,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.LocationCity,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "City",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                    )
+                    Text(
+                        "Defaults to your forecast city · picks from saved favorites",
+                        color = OnSurfaceMuted,
+                        fontSize = 11.sp,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it },
+            ) {
+                TextField(
+                    value = label,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                    colors = ExposedDropdownMenuDefaults.textFieldColors(
+                        focusedContainerColor = Color(0xFF263238),
+                        unfocusedContainerColor = Color(0xFF263238),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                    ),
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    cities.forEach { city ->
+                        DropdownMenuItem(
+                            text = { Text(city.name) },
+                            onClick = {
+                                onSelectCity(city)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -300,15 +456,12 @@ fun HazardExploreRadiusCard(
             }
             Spacer(Modifier.height(12.dp))
             val radiusChips = PreferencesRepository.MAP_FOCUS_RADIUS_CHIPS
+            val isCustomRadius = exploreRadiusMiles !in radiusChips
+            var showCustomRadius by remember { mutableStateOf(false) }
             val radiusChipScroll = rememberScrollState()
-            val radiusBringers = remember {
-                radiusChips.associateWith { BringIntoViewRequester() }
-            }
-            val focusedRadiusChip = radiusChips.minByOrNull {
-                kotlin.math.abs(it - exploreRadiusMiles)
-            } ?: radiusChips.first()
-            LaunchedEffect(focusedRadiusChip) {
-                radiusBringers[focusedRadiusChip]?.bringIntoView()
+            val customRadiusBring = remember { BringIntoViewRequester() }
+            LaunchedEffect(isCustomRadius) {
+                if (isCustomRadius) customRadiusBring.bringIntoView()
             }
             Row(
                 Modifier
@@ -317,14 +470,11 @@ fun HazardExploreRadiusCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 radiusChips.forEach { miles ->
-                    val selected = miles == exploreRadiusMiles || miles == focusedRadiusChip
+                    val selected = miles == exploreRadiusMiles
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = if (selected) accent.copy(alpha = 0.35f) else Color(0xFF2A363C),
                         modifier = Modifier
-                            .bringIntoViewRequester(
-                                radiusBringers[miles] ?: BringIntoViewRequester(),
-                            )
                             .border(
                                 width = if (selected) 1.5.dp else 0.dp,
                                 color = if (selected) accent else Color.Transparent,
@@ -341,23 +491,46 @@ fun HazardExploreRadiusCard(
                         )
                     }
                 }
+                // Custom distance entry (any value 25–4000 mi)
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isCustomRadius) accent.copy(alpha = 0.35f) else Color(0xFF2A363C),
+                    modifier = Modifier
+                        .bringIntoViewRequester(customRadiusBring)
+                        .border(
+                            width = if (isCustomRadius) 1.5.dp else 0.dp,
+                            color = if (isCustomRadius) accent else Color.Transparent,
+                            shape = RoundedCornerShape(20.dp),
+                        )
+                        .clickable { showCustomRadius = true },
+                ) {
+                    Text(
+                        if (isCustomRadius) formatMilesShort(exploreRadiusMiles) else "Custom",
+                        color = if (isCustomRadius) Color.White else OnSurfaceMuted,
+                        fontWeight = if (isCustomRadius) FontWeight.SemiBold else FontWeight.Normal,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
             }
-            Spacer(Modifier.height(10.dp))
-            Slider(
-                value = exploreRadiusMiles.toFloat().coerceIn(50f, 4000f),
-                onValueChange = { onRadiusChange(snapRadius(it.roundToInt())) },
-                valueRange = 50f..4000f,
-                colors = SliderDefaults.colors(
-                    thumbColor = accent,
-                    activeTrackColor = accent,
-                    inactiveTrackColor = Color(0xFF455A64),
-                ),
-            )
             if (exploreRadiusMiles != settingsDefaultMiles) {
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "Settings default stays ${formatMiles(settingsDefaultMiles)} · this is temporary",
                     color = OnSurfaceMuted,
                     fontSize = 11.sp,
+                )
+            }
+            if (showCustomRadius) {
+                HazardCustomRadiusDialog(
+                    accent = accent,
+                    // Always start blank so focus/typing is not fighting a prefilled value
+                    initialMiles = null,
+                    onDismiss = { showCustomRadius = false },
+                    onConfirm = { miles ->
+                        showCustomRadius = false
+                        onRadiusChange(miles.coerceIn(25, 4000))
+                    },
                 )
             }
         }
@@ -412,13 +585,18 @@ fun HazardHistoryDaysCard(
                 )
                 .padding(pad),
         ) {
+            // Title + badge on one row; subtitle full-width below so long date
+            // ranges do not crush the help text into a narrow column.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.History, null, tint = accent, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                    Text(subtitle, color = OnSurfaceMuted, fontSize = 11.sp)
-                }
+                Text(
+                    title,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    modifier = Modifier.weight(1f),
+                )
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = accent.copy(alpha = 0.22f),
@@ -427,11 +605,19 @@ fun HazardHistoryDaysCard(
                         badgeLabel,
                         color = accent,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
             }
+            Text(
+                subtitle,
+                color = OnSurfaceMuted,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                modifier = Modifier.padding(start = 32.dp, top = 4.dp),
+            )
             Spacer(Modifier.height(12.dp))
             val historyChipScroll = rememberScrollState()
             val historyBringers = remember(chips) {
@@ -553,6 +739,98 @@ fun HazardHistoryDaysCard(
     }
 }
 
+/**
+ * Custom explore distance: miles field starts empty and clears again on focus
+ * so typing is not fighting a prefilled value.
+ */
+@Composable
+private fun HazardCustomRadiusDialog(
+    accent: Color,
+    initialMiles: Int?,
+    onDismiss: () -> Unit,
+    onConfirm: (miles: Int) -> Unit,
+) {
+    var text by remember {
+        mutableStateOf(initialMiles?.toString().orEmpty())
+    }
+    var clearedOnce by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    fun tryConfirm() {
+        val miles = text.trim().toIntOrNull()
+        if (miles != null && miles in 25..4000) {
+            onConfirm(miles)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Custom explore distance", fontWeight = FontWeight.SemiBold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Enter miles from the selected city (25–4000).",
+                    color = OnSurfaceMuted,
+                    fontSize = 13.sp,
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { raw ->
+                        text = raw.filter { it.isDigit() }.take(4)
+                    },
+                    singleLine = true,
+                    label = { Text("Miles") },
+                    placeholder = { Text("e.g. 40") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { tryConfirm() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = accent,
+                        cursorColor = accent,
+                        focusedLabelColor = accent,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { state ->
+                            // First focus clears any seed value so the field is ready to type.
+                            if (state.isFocused && !clearedOnce) {
+                                text = ""
+                                clearedOnce = true
+                            }
+                        },
+                )
+            }
+        },
+        confirmButton = {
+            val miles = text.trim().toIntOrNull()
+            TextButton(
+                onClick = {
+                    keyboard?.hide()
+                    tryConfirm()
+                },
+                enabled = miles != null && miles in 25..4000,
+            ) {
+                Text("Apply", color = accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = OnSurfaceMuted)
+            }
+        },
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HazardCustomDateRangeDialog(
@@ -562,14 +840,17 @@ private fun HazardCustomDateRangeDialog(
     onDismiss: () -> Unit,
     onConfirm: (startMs: Long, endMs: Long) -> Unit,
 ) {
-    val now = System.currentTimeMillis()
-    val defaultEnd = endOfUtcDay(now)
-    val defaultStart = startOfUtcDay(now - 30L * 24L * 3600L * 1000L)
+    // Always open with a blank selection so the user is not editing leftover dates.
+    // (Material date fields still show hints; calendar has nothing pre-selected.)
     val state = rememberDateRangePickerState(
-        initialSelectedStartDateMillis = initialStartMs ?: defaultStart,
-        initialSelectedEndDateMillis = initialEndMs ?: defaultEnd,
+        initialSelectedStartDateMillis = null,
+        initialSelectedEndDateMillis = null,
         yearRange = IntRange(1950, Calendar.getInstance().get(Calendar.YEAR)),
     )
+    // Suppress unused warnings — callers may still pass last range for future “edit” mode.
+    @Suppress("UNUSED_VARIABLE")
+    val ignoredInitial = initialStartMs to initialEndMs
+
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -636,9 +917,14 @@ private fun formatCustomRangeLabel(startMs: Long, endMs: Long): String {
     return if (a == b) a else "$a – $b"
 }
 
+/**
+ * Format a Material DatePicker selection for display.
+ * Picker millis are UTC midnights representing calendar dates — format in UTC
+ * so "June 1" does not show as "May 31" in US timezones.
+ */
 private fun formatShortDate(epochMs: Long): String {
     val fmt = SimpleDateFormat("MMM d, yyyy", Locale.US).apply {
-        timeZone = TimeZone.getDefault()
+        timeZone = TimeZone.getTimeZone("UTC")
     }
     return fmt.format(Date(epochMs))
 }
@@ -735,10 +1021,8 @@ private fun formatMiles(miles: Int): String = when {
     else -> "$miles mi"
 }
 
-private fun formatMilesShort(miles: Int): String = when {
-    miles >= 1000 -> "${miles / 1000}k"
-    else -> "$miles"
-}
+/** Short chip label; trailing "m" means miles (not meters/kilometers). */
+private fun formatMilesShort(miles: Int): String = "${miles}m"
 
 fun formatHistoryDays(days: Int): String = PreferencesRepository.historyDaysLabel(days)
 
