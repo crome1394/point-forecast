@@ -7,6 +7,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.8] — 2026-08-27
+
+### Fixed
+
+- Add City search honors **Search bar at bottom** (same Settings toggle as Map) and lifts above the keyboard
+- Hazard loading banner uses two lines (title + muted note) for long history updates
+- Clarify tropical cyclone distance is to the **current** NHC center (not closest historical approach)
+- F-Droid rebuild of the full 1.1.7 tip (store icon + OSM map tiles); prior F-Droid 1.1.7 was an earlier prep commit
+
 ## [1.1.7] — 2026-08-27
 
 ### Fixed

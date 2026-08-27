@@ -548,13 +548,13 @@ class MainActivity : ComponentActivity() {
                                 if (earthquakes == null) {
                                     "Loading earthquakes…"
                                 } else {
-                                    "Updating earthquakes (longer history can take a bit)…"
+                                    "Updating earthquakes\n(Longer history can take a bit)…"
                                 }
                             CelestialBody.Storms ->
                                 if (severeWeather == null) {
                                     "Loading severe weather…"
                                 } else {
-                                    "Updating severe weather (longer history can take a bit)…"
+                                    "Updating severe weather\n(Longer history can take a bit)…"
                                 }
                             else -> ""
                         }
@@ -608,6 +608,7 @@ class MainActivity : ComponentActivity() {
                                 AppScreen.Search -> SearchScreen(
                                     results = searchResults,
                                     searching = searching,
+                                    searchAtBottom = mapSearchAtBottom,
                                     onQueryChange = { viewModel.search(it) },
                                     onSelect = {
                                         viewModel.selectGeocode(it)

@@ -228,6 +228,11 @@ fun HazardLoadingBanner(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
+    // Allow a cleaner two-line banner via '\n' (title + muted subtitle).
+    val lines = message.split('\n', limit = 2)
+    val title = lines[0]
+    val subtitle = lines.getOrNull(1)?.takeIf { it.isNotBlank() }
+
     Surface(
         modifier.fillMaxWidth(),
         color = SurfaceDark,
@@ -250,12 +255,22 @@ fun HazardLoadingBanner(
                 color = accent,
                 strokeWidth = 2.5.dp,
             )
-            Text(
-                message,
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        color = OnSurfaceMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
         }
     }
 }

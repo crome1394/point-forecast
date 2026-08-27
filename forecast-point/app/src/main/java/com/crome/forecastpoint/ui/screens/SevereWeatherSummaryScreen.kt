@@ -430,7 +430,9 @@ fun SevereWeatherSummaryScreen(
                             "Terms & scales\n" +
                             "• kt (knots) — wind speed (~1.15 mph). TS ≈ 34+ kt; hurricane ≈ 64+ kt.\n" +
                             "• EF scale — tornado damage EF0–EF5 (UNK = not rated yet).\n" +
-                            "• mi — miles from your selected city (straight-line).\n\n" +
+                            "• mi — miles from your selected city (straight-line).\n" +
+                            "  For Tropical rows this is the **current** NHC center, not the " +
+                            "storm’s closest historical approach.\n\n" +
                             "Settings on this screen are temporary (do not change app Settings defaults).\n\n" +
                             "Limits\n" +
                             "SPC reports can be revised. This is not a substitute for official NWS warnings.",
@@ -621,6 +623,11 @@ private fun TropicalReportRow(
                 "Active tropical cyclone · Winds $wind · Pressure $mb",
                 color = Color.White,
                 fontSize = 13.sp,
+            )
+            Text(
+                "Current center · ${String.format(Locale.US, "%.0f", s.distanceMiles)} mi from city",
+                color = OnSurfaceMuted,
+                fontSize = 12.sp,
             )
             val move = buildString {
                 s.movementDir?.let { append("Moving $it°") }

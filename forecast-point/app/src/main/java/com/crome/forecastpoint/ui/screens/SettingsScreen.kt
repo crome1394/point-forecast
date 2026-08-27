@@ -168,9 +168,9 @@ fun SettingsScreen(
             SettingsSwitchRow(
                 title = "Search bar at bottom",
                 description = if (mapSearchAtBottom) {
-                    "Search appears at the bottom of the map"
+                    "Map and Add City search appear at the bottom (lifts above the keyboard)"
                 } else {
-                    "Search appears at the top of the map (default)"
+                    "Map and Add City search appear at the top (default)"
                 },
                 checked = mapSearchAtBottom,
                 onCheckedChange = onMapSearchAtBottomChange,
