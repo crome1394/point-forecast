@@ -1,120 +1,120 @@
 # Releasing Point Forecast
 
-How to cut a public release from this repository (GitHub APK and/or F-Droid).
+How to cut a public release (GitHub + F-Droid upstream-signed reproducible flow).
+
+Background: [docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md).
 
 ## Prerequisites
 
-- Clean working tree on the branch you intend to ship (usually `main` after merge)
-- JDK 17+, Android SDK
-- For a **signed** APK/AAB: a keystore and `keystore.properties` (never commit these)
+- Clean working tree on `main` (after merge)
+- JDK 17+, Android SDK with **Build Tools 34.0.0** (`apksigner`)
+- Release keystore **outside** the repo (see `scripts/create-release-keystore.sh`)
+- Env vars for signing (never commit these):
 
-Example `forecast-point/keystore.properties` (local only):
-
-```properties
-storeFile=/path/to/your.keystore
-storePassword=***
-keyAlias=***
-keyPassword=***
+```bash
+export PF_RELEASE_KEYSTORE="$HOME/.local/share/point-forecast/point-forecast-release.jks"
+export PF_RELEASE_KEY_ALIAS=pointforecast
+export PF_KEYSTORE_PASSWORD='…'
+export PF_KEY_PASSWORD='…'
 ```
-
-Wire signing in `app/build.gradle.kts` if not already configured for release.
 
 ## Version numbers
 
-1. Choose the next version (semver).
-   - Feature drop after 1.0.3 → **1.1.0**
-   - Bug fix after 1.1.0 → **1.1.1** (`versionCode` +1)
-2. Update `forecast-point/app/build.gradle.kts`:
-   - `versionName = "1.1.1"`
-   - `versionCode` must increase (e.g. `6` if 1.1.0 was `5`)
-3. Move `[Unreleased]` notes in [CHANGELOG.md](CHANGELOG.md) under `## [1.1.1] — YYYY-MM-DD` (or merge the bugfix into the version you are about to ship)
-4. Leave a fresh empty `## [Unreleased]` section at the top
-5. Update any version examples in [README.md](README.md) if they name a specific APK
+1. Choose the next semver (`versionName`) and bump `versionCode` by 1.
+2. Update `forecast-point/app/build.gradle.kts`.
+3. Move `[Unreleased]` notes in [CHANGELOG.md](CHANGELOG.md) under `## [X.Y.Z] — YYYY-MM-DD`.
+4. Leave a fresh empty `## [Unreleased]` section at the top.
 
-## Build
+## Build (unsigned, deterministic)
+
+Prefer a **fresh clone** of the exact commit/tag you will publish (matches F-Droid).
 
 ```bash
 cd forecast-point
-./gradlew clean :app:assembleRelease
+./gradlew --no-daemon --no-parallel --no-configuration-cache clean :app:assembleRelease
 ```
 
-Unsigned output (if signing is not configured):
+Unsigned output:
 
 ```text
 app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-Signed output (if signing is configured):
-
-```text
-app/build/outputs/apk/release/app-release.apk
-```
-
-Optional copy for distribution:
+Same-machine determinism smoke test (from repo root):
 
 ```bash
-mkdir -p ../dist
-cp app/build/outputs/apk/release/app-release*.apk \
-  ../dist/PointForecast-1.1.0.apk
-# or rename after signing:
-# apksigner sign --ks your.keystore --out ../dist/PointForecast-1.1.0.apk app-release-unsigned.apk
+sh scripts/verify-deterministic-build.sh
 ```
 
-Install smoke test:
+## Sign (Build Tools 34 only)
 
 ```bash
-adb install -r ../dist/PointForecast-1.1.0.apk
+# From repo root, with PF_* env set:
+mkdir -p dist
+sh scripts/sign-release.sh \
+  forecast-point/app/build/outputs/apk/release/app-release-unsigned.apk \
+  dist/app-release-signed.apk
+```
+
+The script verifies the certificate against `scripts/expected-release-cert.sha256`.
+
+**Do not** sign with Build Tools 35+ `apksigner` for F-Droid upstream-signed releases.
+
+## Install smoke test
+
+```bash
+adb install -r dist/app-release-signed.apk
+# If INSTALL_FAILED_UPDATE_INCOMPATIBLE: uninstall the debug/F-Droid build first.
 ```
 
 ## Git tag and GitHub release
 
+Attach the asset with this **exact** name (F-Droid `Binaries` contract):
+
+```text
+app-release-signed.apk
+```
+
 ```bash
-# From repo root, on main after merge:
+# From repo root, on main after version bump is pushed:
 git status   # should be clean
-git tag -a v1.1.0 -m "Point Forecast 1.1.0"
+git tag -a vX.Y.Z -m "Point Forecast X.Y.Z"
 git push origin main
-git push origin v1.1.0
+git push origin vX.Y.Z
+
+gh release create vX.Y.Z dist/app-release-signed.apk \
+  --title "Point Forecast X.Y.Z" \
+  --notes-file -   # paste ## [X.Y.Z] from CHANGELOG
 ```
 
-Create a GitHub Release for tag `v1.1.0`:
+Push the tag only when the signed asset is ready to attach (or attach in the same `gh release create`).
 
-1. Title: `Point Forecast 1.1.0`
-2. Body: paste the `## [1.1.0]` section from CHANGELOG (user-facing bullets)
-3. Attach `PointForecast-1.1.0.apk` (signed preferred)
+## F-Droid
 
-```bash
-# Optional CLI:
-gh release create v1.1.0 dist/PointForecast-1.1.0.apk \
-  --title "Point Forecast 1.1.0" \
-  --notes-file -   # paste changelog section, Ctrl-D
-```
+With `Binaries` + `AllowedAPKSigningKeys` in fdroiddata:
 
-## Closing the feature branch
+- `UpdateCheckMode: Tags` picks up `vX.Y.Z`
+- F-Droid rebuilds from the tag and compares to your GitHub APK
+- On match, they publish **your** signature
+- On mismatch, that version is skipped (they will not fall back to F-Droid signing for this mode)
 
-After the work is merged to `main`:
+Watch:
 
-```bash
-git checkout main
-git pull origin main
-git branch -d feature/sun-moon-screen
-git push origin --delete feature/sun-moon-screen   # if remote branch exists
-```
+- https://f-droid.org/packages/com.crome.forecastpoint/
+- `https://f-droid.org/repo/com.crome.forecastpoint_<versionCode>.log.gz`
 
-Or merge via GitHub PR, then delete the branch in the UI.
+### Existing F-Droid users (one-time)
 
-## F-Droid (if applicable)
-
-- Point F-Droid metadata at the **git tag** (`v1.1.0`)
-- Build type: release; `versionCode` / `versionName` must match the tag’s `build.gradle.kts`
-- Ensure reproducible or documented signing policy matches your F-Droid recipe
-- Update package description if new data sources appear (earthquakes, NHC/SPC, USGS stage)
+Users on older **F-Droid-signed** builds must uninstall/reinstall once to move to the developer key.
 
 ## Checklist
 
 - [ ] Version name/code bumped  
 - [ ] CHANGELOG `[Unreleased]` → dated version  
-- [ ] `./gradlew :app:assembleRelease` succeeds  
-- [ ] Smoke test: forecast, hourly, map, sun/moon hub, tides, settings  
+- [ ] `verify-deterministic-build.sh` passes  
+- [ ] `sign-release.sh` → `dist/app-release-signed.apk`  
+- [ ] `verify-release-signing.sh` passes  
+- [ ] Device smoke test  
 - [ ] Tag `vX.Y.Z` pushed  
-- [ ] GitHub Release + APK attached  
-- [ ] Feature branch deleted after merge  
+- [ ] GitHub Release with asset **`app-release-signed.apk`**  
+- [ ] (First RB release) fdroiddata MR includes `Binaries` + `AllowedAPKSigningKeys`  
