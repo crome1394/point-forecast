@@ -14,10 +14,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +30,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,7 +37,9 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Menu
@@ -161,8 +159,6 @@ class MainActivity : ComponentActivity() {
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
-                /** Long-press target: show Rename / Remove menu. */
-                var cityActionTarget by remember { mutableStateOf<SavedLocation?>(null) }
                 /** City being renamed (shows text field dialog). */
                 var cityRenameTarget by remember { mutableStateOf<SavedLocation?>(null) }
                 var cityRenameText by remember { mutableStateOf("") }
@@ -174,7 +170,6 @@ class MainActivity : ComponentActivity() {
                     when {
                         drawerState.isOpen -> scope.launch { drawerState.close() }
                         cityRenameTarget != null -> cityRenameTarget = null
-                        cityActionTarget != null -> cityActionTarget = null
                         sunMoonMenuOpen -> sunMoonMenuOpen = false
                         screen != AppScreen.Forecast -> screen = AppScreen.Forecast
                     }
@@ -271,36 +266,7 @@ class MainActivity : ComponentActivity() {
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 }
 
-                // Long-press menu: Rename or Remove
-                cityActionTarget?.let { loc ->
-                    AlertDialog(
-                        onDismissRequest = { cityActionTarget = null },
-                        title = { Text(loc.name) },
-                        text = { Text("What would you like to do with this saved city?") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                cityRenameText = loc.name
-                                cityRenameTarget = loc
-                                cityActionTarget = null
-                            }) { Text("Rename") }
-                        },
-                        dismissButton = {
-                            Row {
-                                TextButton(onClick = {
-                                    viewModel.removeFavorite(loc.id)
-                                    cityActionTarget = null
-                                }) {
-                                    Text("Remove", color = Color(0xFFEF9A9A))
-                                }
-                                TextButton(onClick = { cityActionTarget = null }) {
-                                    Text("Cancel")
-                                }
-                            }
-                        },
-                    )
-                }
-
-                // Rename dialog
+                // Rename dialog (opened from the edit icon on a saved city)
                 cityRenameTarget?.let { loc ->
                     AlertDialog(
                         onDismissRequest = { cityRenameTarget = null },
@@ -390,7 +356,16 @@ class MainActivity : ComponentActivity() {
                                 screen = AppScreen.Forecast
                                 scope.launch { drawerState.close() }
                             },
-                            onLongPressFavorite = { loc -> cityActionTarget = loc },
+                            onRenameFavorite = { loc ->
+                                cityRenameText = loc.name
+                                cityRenameTarget = loc
+                            },
+                            onRemoveFavorite = { loc ->
+                                viewModel.removeFavorite(loc.id)
+                            },
+                            onFavoritesOrderChange = { ids ->
+                                viewModel.reorderFavorites(ids)
+                            },
                             onSettings = {
                                 screen = AppScreen.Settings
                                 scope.launch { drawerState.close() }
@@ -972,7 +947,6 @@ private fun CelestialMenuPill(
 
 private enum class AppScreen { Forecast, Hourly, Search, Map, Settings, About, SunMoon }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppDrawer(
     favorites: List<SavedLocation>,
@@ -989,7 +963,9 @@ private fun AppDrawer(
     onEarthquakes: () -> Unit,
     onStorms: () -> Unit,
     onSelectFavorite: (SavedLocation) -> Unit,
-    onLongPressFavorite: (SavedLocation) -> Unit,
+    onRenameFavorite: (SavedLocation) -> Unit,
+    onRemoveFavorite: (SavedLocation) -> Unit,
+    onFavoritesOrderChange: (List<String>) -> Unit,
     onSettings: () -> Unit,
     onAbout: () -> Unit,
 ) {
@@ -1166,67 +1142,182 @@ private fun AppDrawer(
                 modifier = Modifier.padding(vertical = 2.dp),
             )
 
-            LazyColumn(Modifier.weight(1f)) {
-                if (favorites.isNotEmpty()) {
-                    item {
-                        Text(
-                            "Saved cities",
-                            color = Color(0xFF90A4AE),
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-                items(favorites, key = { it.id }) { loc ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = { onSelectFavorite(loc) },
-                                onLongClick = { onLongPressFavorite(loc) },
+            HorizontalDivider(
+                color = Color(0xFF37474F),
+                modifier = Modifier.padding(vertical = 2.dp),
+            )
+
+            // Saved cities: same layout as menu rows above (plain Column, NO verticalScroll).
+            // Scroll parents cancel long-press before drag can start.
+            val favoriteIds = remember(favorites) { favorites.map { it.id } }
+            var cityOrder by remember { mutableStateOf(favoriteIds) }
+            val cityRowHeightPx = with(density) { 40.dp.toPx() }
+            var cityDraggingIndex by remember { mutableIntStateOf(-1) }
+            var cityDragOffsetY by remember { mutableFloatStateOf(0f) }
+            var cityDragStartOrder by remember { mutableStateOf(cityOrder) }
+            LaunchedEffect(favoriteIds) {
+                if (cityDraggingIndex < 0 && favoriteIds != cityOrder) cityOrder = favoriteIds
+            }
+            val favoritesById = remember(favorites) { favorites.associateBy { it.id } }
+
+            if (cityOrder.isNotEmpty()) {
+                Text(
+                    "Saved cities",
+                    color = Color(0xFF90A4AE),
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+                Text(
+                    "Long-press & drag to reorder",
+                    color = Color(0xFF607D8B),
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 0.dp),
+                )
+            } else {
+                Text(
+                    "No saved cities yet.\nTap Add City to search.",
+                    color = Color(0xFF90A4AE),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
+
+            Column(Modifier.fillMaxWidth()) {
+                cityOrder.forEach { id ->
+                    val loc = favoritesById[id]
+                    if (loc == null) return@forEach
+                    key(id) {
+                        val isDragging = cityOrder.indexOf(id) == cityDraggingIndex
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .zIndex(if (isDragging) 2f else 0f)
+                                .offset {
+                                    IntOffset(
+                                        x = 0,
+                                        y = if (isDragging) cityDragOffsetY.roundToInt() else 0,
+                                    )
+                                }
+                                .background(
+                                    when {
+                                        isDragging -> Color(0xFF37474F)
+                                        loc.id == activeId -> Color(0xFF37474F)
+                                        else -> Color.Transparent
+                                    },
+                                )
+                                .pointerInput(Unit) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            val idx = cityOrder.indexOf(id)
+                                            if (idx < 0) return@detectDragGesturesAfterLongPress
+                                            cityDraggingIndex = idx
+                                            cityDragOffsetY = 0f
+                                            cityDragStartOrder = cityOrder
+                                        },
+                                        onDragCancel = {
+                                            cityOrder = cityDragStartOrder
+                                            cityDraggingIndex = -1
+                                            cityDragOffsetY = 0f
+                                        },
+                                        onDragEnd = {
+                                            cityDraggingIndex = -1
+                                            cityDragOffsetY = 0f
+                                            onFavoritesOrderChange(cityOrder)
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            val from = cityDraggingIndex
+                                            if (from < 0) return@detectDragGesturesAfterLongPress
+                                            cityDragOffsetY += dragAmount.y
+                                            val shift =
+                                                (cityDragOffsetY / cityRowHeightPx).toInt()
+                                            if (shift != 0) {
+                                                val to = (from + shift)
+                                                    .coerceIn(0, cityOrder.lastIndex)
+                                                if (to != from) {
+                                                    val next = cityOrder.toMutableList()
+                                                    val item = next.removeAt(from)
+                                                    next.add(to, item)
+                                                    cityOrder = next
+                                                    cityDraggingIndex = to
+                                                    cityDragOffsetY -= shift * cityRowHeightPx
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                                .clickable(enabled = cityDraggingIndex < 0) {
+                                    onSelectFavorite(loc)
+                                }
+                                .padding(start = 4.dp, end = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Filled.DragHandle,
+                                contentDescription = "Drag to reorder",
+                                tint = Color(0xFF78909C),
+                                modifier = Modifier.size(16.dp),
                             )
-                            .background(
-                                if (loc.id == activeId) Color(0xFF37474F) else Color.Transparent,
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = Color(0xFFFFCC80),
+                                modifier = Modifier.size(18.dp),
                             )
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Filled.Star,
-                            contentDescription = null,
-                            tint = Color(0xFFFFCC80),
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(loc.name, color = Color.White, fontSize = 14.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                loc.name,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                            )
+                            // Use plain Icons + clickable so they don't steal the row long-press
+                            // the way IconButton's minimum touch target can.
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = "Rename ${loc.name}",
+                                tint = Color(0xFF90A4AE),
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable {
+                                        onRenameFavorite(loc)
+                                    }
+                                    .padding(7.dp),
+                            )
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Remove ${loc.name}",
+                                tint = Color(0xFFEF9A9A),
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable {
+                                        onRemoveFavorite(loc)
+                                    }
+                                    .padding(7.dp),
+                            )
+                        }
                     }
-                }
-                if (favorites.isEmpty()) {
-                    item {
-                        Text(
-                            "No saved cities yet.\nTap Add City to search.",
-                            color = Color(0xFF90A4AE),
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-                item {
-                    HorizontalDivider(
-                        color = Color(0xFF37474F),
-                        modifier = Modifier.padding(vertical = 2.dp),
-                    )
-                    DrawerRow(Icons.Filled.Settings, "Settings", onClick = onSettings)
-                    DrawerRow(Icons.Filled.Info, "About", onClick = onAbout)
-                    Text(
-                        "Long-press city to rename/remove · drag menu to reorder",
-                        color = Color(0xFF607D8B),
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                    Spacer(Modifier.height(6.dp))
                 }
             }
+
+            Spacer(Modifier.weight(1f))
+
+            HorizontalDivider(
+                color = Color(0xFF37474F),
+                modifier = Modifier.padding(vertical = 2.dp),
+            )
+            DrawerRow(Icons.Filled.Settings, "Settings", onClick = onSettings)
+            DrawerRow(Icons.Filled.Info, "About", onClick = onAbout)
+            Text(
+                "Edit / delete on cities · long-press & drag cities or menu to reorder",
+                color = Color(0xFF607D8B),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            Spacer(Modifier.height(6.dp))
         }
     }
 }

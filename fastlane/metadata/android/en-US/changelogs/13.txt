@@ -1,0 +1,4 @@
+• About screen: GitHub and Buy Me a Coffee links with icons
+• Drawer saved cities: edit/delete icons + long-press drag to reorder
+• Settings Hamburger menu: long-press drag reorder (same as Hourly tabs)
+• Fix Settings drag gesture dropping when crossing another row

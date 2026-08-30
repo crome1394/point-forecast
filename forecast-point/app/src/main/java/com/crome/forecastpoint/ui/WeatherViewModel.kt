@@ -439,6 +439,18 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Persist a new saved-city order (drawer long-press drag). */
+    fun reorderFavorites(orderedIds: List<String>) {
+        viewModelScope.launch {
+            runCatching {
+                val byId = favorites.value.associateBy { it.id }
+                val reordered = orderedIds.mapNotNull { byId[it] }
+                val missing = favorites.value.filter { it.id !in orderedIds.toSet() }
+                prefs.saveFavorites(reordered + missing)
+            }
+        }
+    }
+
     fun search(query: String) {
         searchJob?.cancel()
         if (query.isBlank()) {

@@ -2,32 +2,52 @@ package com.crome.forecastpoint.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.BuildConfig
+import com.crome.forecastpoint.R
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
+import com.crome.forecastpoint.ui.theme.SurfaceDark
 
 private const val GITHUB_URL = "https://github.com/crome1394/point-forecast"
+private const val BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/crome1394"
 
 @Composable
 fun AboutScreen() {
     val context = LocalContext.current
+    fun openUrl(url: String) {
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -74,6 +94,7 @@ fun AboutScreen() {
             modifier = Modifier.padding(top = 16.dp),
             fontSize = 13.sp,
         )
+
         Text(
             "Source code",
             color = Color.White,
@@ -81,21 +102,29 @@ fun AboutScreen() {
             fontSize = 15.sp,
             modifier = Modifier.padding(top = 16.dp),
         )
-        Text(
-            text = GITHUB_URL,
-            color = PrimaryBlue,
-            fontSize = 14.sp,
-            textDecoration = TextDecoration.Underline,
-            modifier = Modifier
-                .padding(top = 6.dp)
-                .clickable {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)),
-                        )
-                    }
-                },
+        AboutLinkRow(
+            iconRes = R.drawable.ic_github,
+            iconTint = Color.White,
+            label = "GitHub",
+            subtitle = GITHUB_URL,
+            onClick = { openUrl(GITHUB_URL) },
         )
+
+        Text(
+            "Support",
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        AboutLinkRow(
+            iconRes = R.drawable.ic_buy_me_a_coffee,
+            iconTint = Color(0xFFFFDD00),
+            label = "Buy Me a Coffee",
+            subtitle = "buymeacoffee.com/crome1394",
+            onClick = { openUrl(BUY_ME_A_COFFEE_URL) },
+        )
+
         Text(
             "Data & libraries\n" +
                 "• Forecasts & alerts: National Weather Service (weather.gov / api.weather.gov)\n" +
@@ -128,5 +157,46 @@ fun AboutScreen() {
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
         )
+    }
+}
+
+@Composable
+private fun AboutLinkRow(
+    @DrawableRes iconRes: Int,
+    iconTint: Color,
+    label: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clickable(onClick = onClick),
+        color = SurfaceDark,
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    subtitle,
+                    color = PrimaryBlue,
+                    fontSize = 12.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
     }
 }

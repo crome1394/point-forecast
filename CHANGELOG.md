@@ -7,6 +7,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.10] — 2026-08-30
+
+### Added
+
+- About: GitHub and Buy Me a Coffee link rows with icons
+- Saved cities in the drawer: inline edit/delete icons and long-press drag to reorder
+- Settings Hamburger menu: long-press drag reorder matching Hourly tabs
+
+### Fixed
+
+- Settings Hourly / Hamburger drag losing the gesture when crossing another row
+
 ## [1.1.9] — 2026-08-27
 
 ### Changed

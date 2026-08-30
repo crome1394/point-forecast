@@ -38,6 +38,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -226,12 +227,13 @@ fun SettingsScreen(
         // ── Hamburger menu ─────────────────────────────────────────
         SettingsCategory("Hamburger menu") {
             Text(
-                "Choose which items appear in the side menu. You can also long-press and " +
-                    "drag rows in the menu itself to reorder. Settings and About always stay at the bottom.",
+                "Choose which items appear in the side menu. Long-press and drag (or use ↑↓) " +
+                    "to change order — same as Hourly tabs. You can also reorder in the menu " +
+                    "itself. Settings and About always stay at the bottom.",
                 color = OnSurfaceMuted,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
-                modifier = Modifier.padding(bottom = 4.dp),
+                modifier = Modifier.padding(bottom = 6.dp),
             )
             DrawerNavConfigEditor(
                 config = drawerNavConfig,
@@ -440,7 +442,8 @@ private fun SettingsSwitchRow(
 }
 
 /**
- * Enable/disable hamburger menu items (order can also be changed in the drawer).
+ * Enable/disable + long-press drag reorder for hamburger menu items
+ * (same interaction model as [HourlyTabConfigEditor]).
  */
 @Composable
 private fun DrawerNavConfigEditor(
@@ -448,8 +451,14 @@ private fun DrawerNavConfigEditor(
     onConfigChange: (List<DrawerNavConfigItem>) -> Unit,
 ) {
     var items by remember { mutableStateOf(config) }
+    val density = LocalDensity.current
+    val rowHeightPx = with(density) { 56.dp.toPx() }
+    var draggingIndex by remember { mutableIntStateOf(-1) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val accent = Color(0xFF64B5F6)
+    // Do not sync from prefs while a drag is active (would fight the gesture).
     LaunchedEffect(config) {
-        if (config != items) items = config
+        if (draggingIndex < 0 && config != items) items = config
     }
 
     fun commit(next: List<DrawerNavConfigItem>) {
@@ -457,9 +466,9 @@ private fun DrawerNavConfigEditor(
         onConfigChange(next)
     }
 
-    fun setEnabled(index: Int, enabled: Boolean) {
-        if (index !in items.indices) return
-        val id = items[index].id
+    fun setEnabled(id: String, enabled: Boolean) {
+        val index = items.indexOfFirst { it.id == id }
+        if (index < 0) return
         // Forecast cannot be hidden
         if (id == "Forecast" && !enabled) return
         if (!enabled && items.count { it.enabled } <= 1 && items[index].enabled) return
@@ -477,47 +486,129 @@ private fun DrawerNavConfigEditor(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEachIndexed { index, item ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(if (item.enabled) SurfaceDark else Color(0xFF1A2226))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    PreferencesRepository.drawerNavDisplayName(item.id),
-                    color = if (item.enabled) Color.White else OnSurfaceMuted,
-                    fontSize = 15.sp,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(
-                    onClick = { move(index, index - 1) },
-                    enabled = index > 0,
-                    modifier = Modifier.size(34.dp),
+        items.forEach { item ->
+            key(item.id) {
+                val index = items.indexOfFirst { it.id == item.id }
+                val isDragging = index == draggingIndex
+                val rowAccent = if (item.enabled) accent else accent.copy(alpha = 0.35f)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = if (isDragging) dragOffsetY.roundToInt() else 0,
+                            )
+                        }
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            when {
+                                isDragging -> Color(0xFF37474F)
+                                !item.enabled -> Color(0xFF1A2226)
+                                else -> SurfaceDark
+                            },
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = rowAccent.copy(alpha = if (item.enabled) 0.45f else 0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        // Stable key — do NOT depend on index/items or the gesture cancels on swap
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    val idx = items.indexOfFirst { it.id == item.id }
+                                    if (idx < 0) return@detectDragGesturesAfterLongPress
+                                    draggingIndex = idx
+                                    dragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    draggingIndex = -1
+                                    dragOffsetY = 0f
+                                },
+                                onDragEnd = {
+                                    draggingIndex = -1
+                                    dragOffsetY = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val from = draggingIndex
+                                    if (from < 0) return@detectDragGesturesAfterLongPress
+                                    dragOffsetY += dragAmount.y
+                                    val shift = (dragOffsetY / rowHeightPx).toInt()
+                                    if (shift != 0) {
+                                        val to = (from + shift).coerceIn(0, items.lastIndex)
+                                        if (to != from) {
+                                            val next = items.toMutableList()
+                                            val moved = next.removeAt(from)
+                                            next.add(to, moved)
+                                            items = next
+                                            onConfigChange(next)
+                                            draggingIndex = to
+                                            dragOffsetY -= shift * rowHeightPx
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                        .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Box(
+                        Modifier
+                            .width(4.dp)
+                            .height(48.dp)
+                            .background(rowAccent),
+                    )
                     Icon(
-                        Icons.Filled.KeyboardArrowUp,
-                        contentDescription = "Move up",
-                        tint = if (index > 0) Color.White else Color(0xFF546E7A),
+                        Icons.Filled.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        tint = OnSurfaceMuted,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .size(22.dp),
+                    )
+                    Text(
+                        PreferencesRepository.drawerNavDisplayName(item.id),
+                        color = if (item.enabled) Color.White else OnSurfaceMuted,
+                        fontSize = 15.sp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                    )
+                    IconButton(
+                        onClick = { move(index, index - 1) },
+                        enabled = index > 0,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowUp,
+                            contentDescription = "Move up",
+                            tint = if (index > 0) Color.White else Color(0xFF546E7A),
+                        )
+                    }
+                    IconButton(
+                        onClick = { move(index, index + 1) },
+                        enabled = index >= 0 && index < items.lastIndex,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowDown,
+                            contentDescription = "Move down",
+                            tint = if (index >= 0 && index < items.lastIndex) {
+                                Color.White
+                            } else {
+                                Color(0xFF546E7A)
+                            },
+                        )
+                    }
+                    Switch(
+                        checked = item.enabled,
+                        onCheckedChange = { setEnabled(item.id, it) },
+                        enabled = item.id != "Forecast",
                     )
                 }
-                IconButton(
-                    onClick = { move(index, index + 1) },
-                    enabled = index < items.lastIndex,
-                    modifier = Modifier.size(34.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Move down",
-                        tint = if (index < items.lastIndex) Color.White else Color(0xFF546E7A),
-                    )
-                }
-                Switch(
-                    checked = item.enabled,
-                    onCheckedChange = { setEnabled(index, it) },
-                    enabled = item.id != "Forecast",
-                )
             }
         }
     }
@@ -611,13 +702,13 @@ private fun HourlyTabConfigEditor(
     onConfigChange: (List<HourlyTabConfigItem>) -> Unit,
 ) {
     var items by remember { mutableStateOf(config) }
-    LaunchedEffect(config) {
-        if (config != items) items = config
-    }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
     var draggingIndex by remember { mutableIntStateOf(-1) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(config) {
+        if (draggingIndex < 0 && config != items) items = config
+    }
 
     fun commit(next: List<HourlyTabConfigItem>) {
         items = next
@@ -632,8 +723,9 @@ private fun HourlyTabConfigEditor(
         commit(next)
     }
 
-    fun setEnabled(index: Int, enabled: Boolean) {
-        if (index !in items.indices) return
+    fun setEnabled(id: String, enabled: Boolean) {
+        val index = items.indexOfFirst { it.id == id }
+        if (index < 0) return
         // Keep at least one tab enabled
         if (!enabled && items.count { it.enabled } <= 1 && items[index].enabled) return
         val next = items.toMutableList()
@@ -642,129 +734,138 @@ private fun HourlyTabConfigEditor(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEachIndexed { index, item ->
-            val isDragging = index == draggingIndex
-            val source = hourlyTabSourceStyle(item.id)
-            val accent = if (item.enabled) source.accent else source.accent.copy(alpha = 0.35f)
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .offset {
-                        IntOffset(
-                            x = 0,
-                            y = if (isDragging) dragOffsetY.roundToInt() else 0,
+        items.forEach { item ->
+            key(item.id) {
+                val index = items.indexOfFirst { it.id == item.id }
+                val isDragging = index == draggingIndex
+                val source = hourlyTabSourceStyle(item.id)
+                val accent = if (item.enabled) source.accent else source.accent.copy(alpha = 0.35f)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = if (isDragging) dragOffsetY.roundToInt() else 0,
+                            )
+                        }
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            when {
+                                isDragging -> Color(0xFF37474F)
+                                !item.enabled -> Color(0xFF1A2226)
+                                else -> SurfaceDark
+                            },
                         )
-                    }
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        when {
-                            isDragging -> Color(0xFF37474F)
-                            !item.enabled -> Color(0xFF1A2226)
-                            else -> SurfaceDark
-                        },
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = accent.copy(alpha = if (item.enabled) 0.45f else 0.2f),
-                        shape = RoundedCornerShape(8.dp),
-                    )
-                    .pointerInput(index, items) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                draggingIndex = index
-                                dragOffsetY = 0f
-                            },
-                            onDragCancel = {
-                                draggingIndex = -1
-                                dragOffsetY = 0f
-                            },
-                            onDragEnd = {
-                                draggingIndex = -1
-                                dragOffsetY = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragOffsetY += dragAmount.y
-                                val from = draggingIndex
-                                if (from < 0) return@detectDragGesturesAfterLongPress
-                                val shift = (dragOffsetY / rowHeightPx).toInt()
-                                if (shift != 0) {
-                                    val to = (from + shift).coerceIn(0, items.lastIndex)
-                                    if (to != from) {
-                                        val next = items.toMutableList()
-                                        val moved = next.removeAt(from)
-                                        next.add(to, moved)
-                                        items = next
-                                        onConfigChange(next)
-                                        draggingIndex = to
-                                        dragOffsetY -= shift * rowHeightPx
+                        .border(
+                            width = 1.dp,
+                            color = accent.copy(alpha = if (item.enabled) 0.45f else 0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        // Stable key — do NOT depend on index/items or the gesture cancels on swap
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    val idx = items.indexOfFirst { it.id == item.id }
+                                    if (idx < 0) return@detectDragGesturesAfterLongPress
+                                    draggingIndex = idx
+                                    dragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    draggingIndex = -1
+                                    dragOffsetY = 0f
+                                },
+                                onDragEnd = {
+                                    draggingIndex = -1
+                                    dragOffsetY = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val from = draggingIndex
+                                    if (from < 0) return@detectDragGesturesAfterLongPress
+                                    dragOffsetY += dragAmount.y
+                                    val shift = (dragOffsetY / rowHeightPx).toInt()
+                                    if (shift != 0) {
+                                        val to = (from + shift).coerceIn(0, items.lastIndex)
+                                        if (to != from) {
+                                            val next = items.toMutableList()
+                                            val moved = next.removeAt(from)
+                                            next.add(to, moved)
+                                            items = next
+                                            onConfigChange(next)
+                                            draggingIndex = to
+                                            dragOffsetY -= shift * rowHeightPx
+                                        }
                                     }
-                                }
+                                },
+                            )
+                        }
+                        .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .width(4.dp)
+                            .height(48.dp)
+                            .background(accent),
+                    )
+                    Icon(
+                        Icons.Filled.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        tint = OnSurfaceMuted,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .size(22.dp),
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                    ) {
+                        Text(
+                            text = PreferencesRepository.hourlyTabDisplayName(item.id),
+                            color = if (item.enabled) Color.White else OnSurfaceMuted,
+                            fontSize = 15.sp,
+                        )
+                        Text(
+                            text = source.shortLabel,
+                            color = accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    IconButton(
+                        onClick = { move(index, index - 1) },
+                        enabled = index > 0,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowUp,
+                            contentDescription = "Move up",
+                            tint = if (index > 0) Color.White else Color(0xFF546E7A),
+                        )
+                    }
+                    IconButton(
+                        onClick = { move(index, index + 1) },
+                        enabled = index >= 0 && index < items.lastIndex,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowDown,
+                            contentDescription = "Move down",
+                            tint = if (index >= 0 && index < items.lastIndex) {
+                                Color.White
+                            } else {
+                                Color(0xFF546E7A)
                             },
                         )
                     }
-                    .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Source accent bar
-                Box(
-                    Modifier
-                        .width(4.dp)
-                        .height(48.dp)
-                        .background(accent),
-                )
-                Icon(
-                    Icons.Filled.DragHandle,
-                    contentDescription = "Drag to reorder",
-                    tint = OnSurfaceMuted,
-                    modifier = Modifier
-                        .padding(start = 6.dp)
-                        .size(22.dp),
-                )
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                ) {
-                    Text(
-                        text = PreferencesRepository.hourlyTabDisplayName(item.id),
-                        color = if (item.enabled) Color.White else OnSurfaceMuted,
-                        fontSize = 15.sp,
-                    )
-                    Text(
-                        text = source.shortLabel,
-                        color = accent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
+                    Switch(
+                        checked = item.enabled,
+                        onCheckedChange = { setEnabled(item.id, it) },
                     )
                 }
-                IconButton(
-                    onClick = { move(index, index - 1) },
-                    enabled = index > 0,
-                    modifier = Modifier.size(34.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowUp,
-                        contentDescription = "Move up",
-                        tint = if (index > 0) Color.White else Color(0xFF546E7A),
-                    )
-                }
-                IconButton(
-                    onClick = { move(index, index + 1) },
-                    enabled = index < items.lastIndex,
-                    modifier = Modifier.size(34.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Move down",
-                        tint = if (index < items.lastIndex) Color.White else Color(0xFF546E7A),
-                    )
-                }
-                Switch(
-                    checked = item.enabled,
-                    onCheckedChange = { setEnabled(index, it) },
-                )
             }
         }
     }
