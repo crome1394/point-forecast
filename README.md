@@ -1,37 +1,88 @@
-# Point Forecast
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/icon.png" alt="Point Forecast icon" width="120" />
+</p>
 
-U.S. National Weather Service **point forecasts** on Android—clear, offline-friendly, and FOSS.
+<h1 align="center">Point Forecast</h1>
 
-**Not affiliated with NOAA, NWS, or any commercial weather app.** Uses public APIs only.
+<p align="center">
+  <strong>U.S. National Weather Service point forecasts</strong> on Android — clear, private, and fully open source.
+</p>
+
+<p align="center">
+  <a href="https://f-droid.org/packages/com.crome.forecastpoint/"><img src="https://img.shields.io/f-droid/v/com.crome.forecastpoint?logo=f-droid&label=F-Droid&color=1976D2" alt="F-Droid" /></a>
+  <a href="https://github.com/crome1394/point-forecast/releases/latest"><img src="https://img.shields.io/github/v/release/crome1394/point-forecast?logo=github&label=GitHub&color=FF8F00" alt="GitHub release" /></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+" />
+  <img src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-E65100?logo=open-source-initiative&logoColor=white" alt="MIT License" /></a>
+  <a href="https://buymeacoffee.com/crome1394"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000000" alt="Buy Me a Coffee" /></a>
+</p>
+
+<p align="center">
+  <em>Not affiliated with NOAA, NWS, or any commercial weather app.</em> Public APIs only.
+</p>
+
+<p align="center">
+  <a href="https://f-droid.org/packages/com.crome.forecastpoint/"><img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid" height="60" /></a>
+  &nbsp;
+  <a href="https://buymeacoffee.com/crome1394"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60" /></a>
+</p>
+
+## Screenshots
+
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" width="180" alt="Forecast" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" width="180" alt="Hourly" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04.png" width="180" alt="Map" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/05.png" width="180" alt="Space weather" />
+</p>
+
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03.png" width="180" alt="Alerts" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/06.png" width="180" alt="Sun & moon" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/07.png" width="180" alt="Earthquakes" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/08.png" width="180" alt="Severe weather" />
+</p>
+
+## Features
+
+- **Current conditions** and multi-day NWS forecast (pull-to-refresh)
+- **Hourly** tables you can reorder: temperature, precip, wind, tides / water level, air quality, visibility, pressure, UV, space weather
+- **Alerts** for watches, warnings, and advisories
+- **Map** location pick (OpenStreetMap / osmdroid — no Google Play Services) plus city search
+- **Radar** via weather.gov from the app bar
+- **Sun / moon / space weather / earthquakes / severe weather** hub
+  - Hazard maps with push-pin markers, explore radius, and history windows
+  - Tropical cyclone + tornado filters
+- **Home screen widget** with bundled NWS icons (works well on CalyxOS)
+- **Settings** for title bar, hourly tabs, drawer, map focus radius, hazard defaults, and more
 
 | | |
 |---|---|
-| **App** | Point Forecast |
-| **ID** | `com.crome.forecastpoint` |
+| **App ID** | `com.crome.forecastpoint` |
 | **Android** | 8.0+ (API 26) |
 | **License** | [MIT](LICENSE) |
 | **Code** | [`forecast-point/`](forecast-point/) |
 
-## What it does
-
-- **Current conditions** and multi-day NWS forecast (pull-to-refresh on the main screen)
-- **Hourly** tables with configurable order and visibility: temperature, precip, wind, conditions, tides / water level, air quality, visibility, pressure, UV, space weather
-- **Alerts** when watches/warnings/advisories are active (optional auto-expand)
-- **Map** pick (GPS pin + selection pin), city search (city + state)
-- **Radar** link (weather.gov) from the app bar
-- **Sun / moon / space weather / earthquakes / severe weather** summaries (title-bar menu, drawer, body switcher tabs)
-  - Hazard maps with **push-pin** markers; explore radius and history (1d–6m or custom date range)
-  - Earthquake magnitude filter; severe weather tropical strength / EF filters
-- **Home widget** with bundled NWS icons (works on CalyxOS)
-- **Settings** for layout, widget mode, hourly tabs, hamburger menu, map focus radius (up to 4000 mi), hazard history default, space weather cue thresholds
-
 ## Download
 
-[**Releases**](https://github.com/crome1394/forecast-point/releases) — install the latest `PointForecast-*.apk`.
+- **[F-Droid](https://f-droid.org/packages/com.crome.forecastpoint/)** — recommended; developer-signed reproducible builds
+- **[GitHub Releases](https://github.com/crome1394/point-forecast/releases)** — same signing key as F-Droid (`app-release-signed.apk`)
 
 ```bash
-adb install -r PointForecast-1.1.3.apk
+adb install -r app-release-signed.apk
 ```
+
+> **Note:** If you installed an early F-Droid build (before 1.1.9), uninstall once and reinstall so Android accepts the developer signing key.
+
+## Support the project
+
+If Point Forecast is useful to you, you can fuel future updates here:
+
+<p>
+  <a href="https://buymeacoffee.com/crome1394"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" /></a>
+</p>
+
+[buymeacoffee.com/crome1394](https://buymeacoffee.com/crome1394)
 
 ## Build
 
@@ -44,13 +95,7 @@ cd forecast-point
 
 Output: `app/build/outputs/apk/…/app-*.apk`
 
-```bash
-adb install -r app/build/outputs/apk/release/app-release-unsigned.apk
-# or debug:
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-Signed store / F-Droid builds: see [RELEASE.md](RELEASE.md) and [CHANGELOG.md](CHANGELOG.md).
+Signed / F-Droid releases: see [RELEASE.md](RELEASE.md) and [docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md).
 
 ## Specs
 
@@ -66,29 +111,29 @@ Signed store / F-Droid builds: see [RELEASE.md](RELEASE.md) and [CHANGELOG.md](C
 | Data | Source |
 |------|--------|
 | Forecast, observations, alerts | NWS (`weather.gov`, `api.weather.gov`) |
-| Tides / water levels | NOAA CO-OPS (tides, subordinate offsets, Great Lakes); USGS NWIS stage (rivers/inland) |
+| Tides / water levels | NOAA CO-OPS; USGS NWIS stage |
 | Space weather (Kp / G/R/S) | NOAA SWPC |
 | Earthquakes | USGS Earthquake Hazards Program (FDSN) |
-| Severe weather (tornadoes / tropical) | NOAA SPC storm reports + WCM archive; NHC CurrentStorms; NWS CAP alerts |
-| Air quality, UV, pressure | [Open-Meteo](https://open-meteo.com/) (optional extras) |
-| Search / map | OpenStreetMap Nominatim, osmdroid + OSM tiles |
+| Severe weather | SPC reports + WCM; NHC CurrentStorms; NWS CAP |
+| Air quality, UV, pressure | [Open-Meteo](https://open-meteo.com/) (optional) |
+| Search / map | Nominatim + OpenStreetMap tiles |
 
-Coverage for core forecast is **U.S. NWS points**. Use APIs politely (clear User-Agent, caching).
+Coverage for core forecast is **U.S. NWS points**.
 
 ## Privacy
 
-No accounts. **No analytics, ads, or crash-reporting SDKs.** Location is used only when you pick GPS, map, or search. Network traffic goes to the public services above (HTTPS only). Full policy: [PRIVACY.md](PRIVACY.md).
+No accounts. **No analytics, ads, or crash-reporting SDKs.** Location is used only when you choose GPS, map, or search. HTTPS only to the public services above. Full policy: [PRIVACY.md](PRIVACY.md).
 
 ## F-Droid / free software
 
 - Source: this repository (MIT)
 - No proprietary Google Play Services; maps via **osmdroid**
-- Reproducible build notes: [RELEASE.md](RELEASE.md); sample metadata: [metadata/com.crome.forecastpoint.yml](metadata/com.crome.forecastpoint.yml)
-- Permissions are limited to network, optional location, and boot reschedule for optional auto-update
+- Reproducible upstream-signed builds: [docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md)
+- Sample metadata: [metadata/com.crome.forecastpoint.yml](metadata/com.crome.forecastpoint.yml)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Release steps: [RELEASE.md](RELEASE.md). Credits and legal notes: [NOTICE](NOTICE).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Release steps: [RELEASE.md](RELEASE.md). Credits: [NOTICE](NOTICE).
 
 ## License
 
