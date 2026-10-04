@@ -49,6 +49,7 @@ Description: |-
     Features:
 
     * Current conditions and multi-day NWS forecast
+    * US customary or metric units (temperature, wind, precipitation, visibility, pressure, tides, earthquake and storm distances)
     * Hourly tables (temperature, precipitation, wind, tides/water level,
       air quality, visibility, pressure, UV, space weather)
     * Watches, warnings, and advisories

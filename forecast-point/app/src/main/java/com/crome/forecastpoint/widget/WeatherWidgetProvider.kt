@@ -16,6 +16,7 @@ import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.util.IconMapper
+import com.crome.forecastpoint.util.Units
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -91,12 +92,22 @@ object WeatherWidgetUpdater {
             val prefs = PreferencesRepository(appContext)
             val snap = snapshot ?: prefs.getSnapshotOnce()
             val showHighLow = prefs.getWidgetShowHighLowOnce()
+            val displayMetric = prefs.getUnitSystemOnce().isMetric
+            val storedMetric = snap?.units?.isMetric == true
             ids.forEach { id ->
                 val minH = appWidgetManager.getAppWidgetOptions(id)
                     ?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110) ?: 110
                 val minW = appWidgetManager.getAppWidgetOptions(id)
                     ?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250) ?: 250
-                val views = buildViews(appContext, snap, showHighLow, minW, minH)
+                val views = buildViews(
+                    appContext,
+                    snap,
+                    showHighLow,
+                    displayMetric,
+                    storedMetric,
+                    minW,
+                    minH,
+                )
                 appWidgetManager.updateAppWidget(id, views)
             }
         }
@@ -106,6 +117,8 @@ object WeatherWidgetUpdater {
         context: Context,
         snap: WeatherSnapshot?,
         showHighLow: Boolean,
+        displayMetric: Boolean,
+        storedMetric: Boolean,
         minWidthDp: Int,
         minHeightDp: Int,
     ): RemoteViews {
@@ -134,7 +147,7 @@ object WeatherWidgetUpdater {
         views.setTextViewText(R.id.widget_datetime, formatHeaderDate(snap))
         views.setTextViewText(
             R.id.widget_temp,
-            snap.current.temperatureF?.let { "$it° F" } ?: "—",
+            Units.temperature(snap.current.temperatureF, storedMetric, displayMetric),
         )
         views.setTextViewText(R.id.widget_sunrise, snap.sunrise ?: "—")
         views.setTextViewText(R.id.widget_sunset, snap.sunset ?: "—")
@@ -144,9 +157,9 @@ object WeatherWidgetUpdater {
         }
 
         if (showHighLow) {
-            bindHighLowCells(context, views, snap.days, dayIconPx)
+            bindHighLowCells(context, views, snap.days, dayIconPx, storedMetric, displayMetric)
         } else {
-            bindPeriodCells(context, views, snap.periods, dayIconPx)
+            bindPeriodCells(context, views, snap.periods, dayIconPx, storedMetric, displayMetric)
         }
         return views
     }
@@ -172,9 +185,14 @@ object WeatherWidgetUpdater {
      * Centered temp strings with a trailing arrow (or spaces) so every cell
      * occupies the same glyph width: "79°↑" / "61°↓" / "62° ".
      */
-    private fun formatTempWithArrow(tempF: Int?, arrow: Char?): String {
-        if (tempF == null) return "  —  "
-        val body = String.format(Locale.US, "%d°", tempF)
+    private fun formatTempWithArrow(
+        temp: Int?,
+        storedMetric: Boolean,
+        displayMetric: Boolean,
+        arrow: Char?,
+    ): String {
+        if (temp == null) return "  —  "
+        val body = Units.temperatureDegrees(temp, storedMetric, displayMetric)
         return when (arrow) {
             null -> "$body "
             else -> "$body$arrow"
@@ -190,6 +208,8 @@ object WeatherWidgetUpdater {
         views: RemoteViews,
         periods: List<ForecastPeriod>,
         iconPx: Int,
+        storedMetric: Boolean,
+        displayMetric: Boolean,
     ) {
         val cells = periods.take(6)
         for (index in 0 until 6) {
@@ -203,7 +223,7 @@ object WeatherWidgetUpdater {
                 views.setTextViewText(dayNameIds[index], shortPeriodLabel(p))
                 views.setTextViewText(
                     dayHiIds[index],
-                    formatTempWithArrow(p.temperatureF, arrow = null),
+                    formatTempWithArrow(p.temperatureF, storedMetric, displayMetric, arrow = null),
                 )
                 // Always keep second line so icon height matches high/low cells.
                 views.setTextViewText(dayLoIds[index], tempLineSpacer)
@@ -221,6 +241,8 @@ object WeatherWidgetUpdater {
         views: RemoteViews,
         days: List<DayForecast>,
         iconPx: Int,
+        storedMetric: Boolean,
+        displayMetric: Boolean,
     ) {
         for (index in 0 until 6) {
             val day = days.getOrNull(index)
@@ -234,16 +256,28 @@ object WeatherWidgetUpdater {
                 views.setTextViewText(dayNameIds[index], shortDayLabel(day.dayName))
                 when {
                     day.highF != null && day.lowF != null -> {
-                        views.setTextViewText(dayHiIds[index], formatTempWithArrow(day.highF, '↑'))
-                        views.setTextViewText(dayLoIds[index], formatTempWithArrow(day.lowF, '↓'))
+                        views.setTextViewText(
+                            dayHiIds[index],
+                            formatTempWithArrow(day.highF, storedMetric, displayMetric, '↑'),
+                        )
+                        views.setTextViewText(
+                            dayLoIds[index],
+                            formatTempWithArrow(day.lowF, storedMetric, displayMetric, '↓'),
+                        )
                     }
                     day.highF != null -> {
-                        views.setTextViewText(dayHiIds[index], formatTempWithArrow(day.highF, '↑'))
+                        views.setTextViewText(
+                            dayHiIds[index],
+                            formatTempWithArrow(day.highF, storedMetric, displayMetric, '↑'),
+                        )
                         views.setTextViewText(dayLoIds[index], tempLineSpacer)
                     }
                     day.lowF != null -> {
                         // Single overnight low: still use two lines (spacer below).
-                        views.setTextViewText(dayHiIds[index], formatTempWithArrow(day.lowF, '↓'))
+                        views.setTextViewText(
+                            dayHiIds[index],
+                            formatTempWithArrow(day.lowF, storedMetric, displayMetric, '↓'),
+                        )
                         views.setTextViewText(dayLoIds[index], tempLineSpacer)
                     }
                     else -> {

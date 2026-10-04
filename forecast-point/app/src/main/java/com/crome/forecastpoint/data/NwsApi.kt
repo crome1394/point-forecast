@@ -32,6 +32,10 @@ class NwsApi(
      * @param includeTides when false, skip CO-OPS / USGS water-level network calls
      * @param includeOpenMeteoWeather UV / visibility / pressure (api.open-meteo.com)
      * @param includeAirQuality US AQI (air-quality-api.open-meteo.com)
+     * @param metric when true, request NWS forecast text in metric and store
+     *   temperatures, wind, precipitation, visibility, and tide height in metric.
+     *   MapClick current observations stay in US units and are converted here.
+     *   Hourly digital wind stays in mph and is converted here.
      */
     suspend fun fetchWeather(
         latitude: Double,
@@ -40,27 +44,30 @@ class NwsApi(
         includeTides: Boolean = true,
         includeOpenMeteoWeather: Boolean = true,
         includeAirQuality: Boolean = true,
+        metric: Boolean = false,
     ): WeatherSnapshot = withContext(Dispatchers.IO) {
         val lat = String.format(Locale.US, "%.4f", latitude)
         val lon = String.format(Locale.US, "%.4f", longitude)
 
+        val mapUnit = if (metric) 1 else 0
         coroutineScope {
-            // Critical path first: forecast JSON (drives main screen)
+            // Critical path first: forecast JSON (drives main screen).
+            // unit=0 US customary, unit=1 metric (period temps + forecast text).
             val forecastDeferred = async {
                 getJson(
-                    "https://forecast.weather.gov/MapClick.php?lat=$lat&lon=$lon&unit=0&lg=english&FcstType=json",
+                    "https://forecast.weather.gov/MapClick.php?lat=$lat&lon=$lon&unit=$mapUnit&lg=english&FcstType=json",
                 )
             }
             val digitalDeferred = async {
                 runCatching {
                     getJson(
-                        "https://forecast.weather.gov/MapClick.php?lat=$lat&lon=$lon&unit=0&lg=english&FcstType=digitalJSON",
+                        "https://forecast.weather.gov/MapClick.php?lat=$lat&lon=$lon&unit=$mapUnit&lg=english&FcstType=digitalJSON",
                     )
                 }.getOrNull()
             }
             // Secondary data in parallel (failures are non-fatal)
             val gridDeferred = async {
-                runCatching { fetchGridSeries(latitude, longitude) }.getOrDefault(GridSeries.EMPTY)
+                runCatching { fetchGridSeries(latitude, longitude, metric) }.getOrDefault(GridSeries.EMPTY)
             }
             // null = request failed; empty list = no active alerts (authoritative)
             val alertsDeferred = async {
@@ -86,6 +93,7 @@ class NwsApi(
                             longitude,
                             includeWeather = includeOpenMeteoWeather,
                             includeAirQuality = includeAirQuality,
+                            metric = metric,
                         ) ?: OpenMeteoService.HourlyExtras.EMPTY
                     }.getOrDefault(OpenMeteoService.HourlyExtras.EMPTY)
                 }
@@ -101,6 +109,7 @@ class NwsApi(
                 latitude = latitude,
                 longitude = longitude,
                 preferredName = preferredName,
+                metric = metric,
             )
         }
     }
@@ -348,7 +357,7 @@ class NwsApi(
         }
     }
 
-    private fun fetchGridSeries(latitude: Double, longitude: Double): GridSeries {
+    private fun fetchGridSeries(latitude: Double, longitude: Double, metric: Boolean): GridSeries {
         val points = getJson(
             "https://api.weather.gov/points/" +
                 String.format(Locale.US, "%.4f,%.4f", latitude, longitude),
@@ -359,27 +368,28 @@ class NwsApi(
         val grid = getJson(gridUrl)
         val props = grid.optJSONObject("properties") ?: return GridSeries.EMPTY
 
+        // Gridpoint values are always SI. Convert into the requested system.
         // QPF is accumulative over the interval → split across hours.
         // Dewpoint / gust are constant over the interval → repeat the value each hour.
         val qpfByEpoch = expandGridSeries(
             props.optJSONObject("quantitativePrecipitation")?.optJSONArray("values"),
-            transform = { mm -> WeatherMath.mmToInches(mm) },
+            transform = { mm -> if (metric) mm else WeatherMath.mmToInches(mm) },
             splitAcrossHours = true,
         )
         val gustByEpoch = expandGridSeries(
             props.optJSONObject("windGust")?.optJSONArray("values"),
-            transform = { kmh -> WeatherMath.kmhToMph(kmh).toDouble() },
+            transform = { kmh -> if (metric) kmh else WeatherMath.kmhToMph(kmh).toDouble() },
             splitAcrossHours = false,
         )
         val dewByEpoch = expandGridSeries(
             props.optJSONObject("dewpoint")?.optJSONArray("values"),
-            transform = { c -> WeatherMath.celsiusToF(c).toDouble() },
+            transform = { c -> if (metric) c else WeatherMath.celsiusToF(c).toDouble() },
             splitAcrossHours = false,
         )
-        // Visibility in meters → miles
+        // Visibility in meters → km or miles
         val visByEpoch = expandGridSeries(
             props.optJSONObject("visibility")?.optJSONArray("values"),
-            transform = { m -> WeatherMath.metersToMiles(m) },
+            transform = { m -> if (metric) m / 1000.0 else WeatherMath.metersToMiles(m) },
             splitAcrossHours = false,
         )
         return GridSeries(
@@ -555,6 +565,7 @@ class NwsApi(
         latitude: Double,
         longitude: Double,
         preferredName: String?,
+        metric: Boolean,
     ): WeatherSnapshot {
         val location = root.optJSONObject("location")
         val area = location?.optString("areaDescription").orEmpty()
@@ -563,15 +574,28 @@ class NwsApi(
             ?: area.ifBlank { "Selected location" }
 
         val currentObj = root.optJSONObject("currentobservation") ?: JSONObject()
-        val temp = currentObj.optString("Temp").toIntOrNull()
+        // MapClick currentobservation stays in °F / mph / miles even when unit=1.
+        val tempUs = currentObj.optString("Temp").toIntOrNull()
         val relh = currentObj.optString("Relh").toIntOrNull()
-        val winds = currentObj.optString("Winds").toIntOrNull()
+        val windsUs = currentObj.optString("Winds").toIntOrNull()
         val windd = currentObj.optString("Windd").toIntOrNull()
-        val dewp = currentObj.optString("Dewp").toIntOrNull()
-            ?: WeatherMath.dewPointF(temp, relh)
+        val dewpUs = currentObj.optString("Dewp").toIntOrNull()
+            ?: WeatherMath.dewPointF(tempUs, relh)
+        val feelsUs = WeatherMath.feelsLikeF(tempUs, relh, windsUs)
+        val temp = if (metric) tempUs?.let { WeatherMath.fahrenheitToC(it.toDouble()) } else tempUs
+        val winds = if (metric) windsUs?.let { WeatherMath.mphToKmh(it.toDouble()) } else windsUs
+        val dewp = if (metric) dewpUs?.let { WeatherMath.fahrenheitToC(it.toDouble()) } else dewpUs
+        val feels = if (metric) feelsUs?.let { WeatherMath.fahrenheitToC(it.toDouble()) } else feelsUs
         val weatherImg = currentObj.optString("Weatherimage")
         val weather = currentObj.optString("Weather").ifBlank { "—" }
-        val visibility = currentObj.optString("Visibility").takeIf { it.isNotBlank() }
+        val visibilityMiles = currentObj.optString("Visibility").takeIf { it.isNotBlank() }
+        val visibility = if (!metric) {
+            visibilityMiles
+        } else {
+            visibilityMiles?.toDoubleOrNull()?.let { miles ->
+                String.format(Locale.US, "%.1f", WeatherMath.milesToKm(miles))
+            } ?: visibilityMiles
+        }
         val slp = currentObj.optString("SLP").takeIf { it.isNotBlank() }
         val slpMb = slp?.toDoubleOrNull()?.let {
             String.format(Locale.US, "%.2f", WeatherMath.inHgToMb(it))
@@ -586,7 +610,7 @@ class NwsApi(
             temperatureF = temp,
             weather = weather,
             iconCode = IconMapper.codeFrom(weatherImg),
-            feelsLikeF = WeatherMath.feelsLikeF(temp, relh, winds),
+            feelsLikeF = feels,
             humidityPct = relh,
             windDirection = WeatherMath.degreesToCardinal(windd) ?: windd?.toString(),
             windSpeedMph = winds,
@@ -651,8 +675,9 @@ class NwsApi(
             ?.let { it / 1000L }
         val hourly = mergeHourlyExtras(
             mergeTides(
-                parseHourly(digital, grid, hourlyAnchorEpochSec),
+                parseHourly(digital, grid, hourlyAnchorEpochSec, metric),
                 tides.heightByEpochHour,
+                metric,
             ),
             grid,
             extras,
@@ -698,25 +723,29 @@ class NwsApi(
             hazards = hazards,
             tideInfo = tideInfo,
             timeZoneId = locationTz.id,
+            unitSystem = if (metric) UnitSystem.Metric.storageValue else UnitSystem.Us.storageValue,
         )
     }
 
     private fun mergeTides(
         rows: List<HourlyRow>,
         heightByEpochHour: Map<Long, Double>,
+        metric: Boolean,
     ): List<HourlyRow> {
         if (rows.isEmpty() || heightByEpochHour.isEmpty()) return rows
         return rows.map { row ->
             val epoch = row.epochSec ?: return@map row
             val hour = (epoch / 3600L) * 3600L
-            val height = heightByEpochHour[hour]
-            val prev = heightByEpochHour[hour - 3600L]
+            // Heights from NOAA are feet. Trend uses a ~1/4 inch step before conversion.
+            val heightFt = heightByEpochHour[hour]
+            val prevFt = heightByEpochHour[hour - 3600L]
             val trend = when {
-                height == null || prev == null -> null
-                height > prev + 0.02 -> "Rising"
-                height < prev - 0.02 -> "Falling"
+                heightFt == null || prevFt == null -> null
+                heightFt > prevFt + 0.02 -> "Rising"
+                heightFt < prevFt - 0.02 -> "Falling"
                 else -> "Steady"
             }
+            val height = heightFt?.let { if (metric) it * 0.3048 else it }
             row.copy(tideFt = height, tideTrend = trend)
         }
     }
@@ -815,6 +844,7 @@ class NwsApi(
         digital: JSONObject?,
         grid: GridSeries,
         hourlyAnchorEpochSec: Long?,
+        metric: Boolean,
     ): List<HourlyRow> {
         if (digital == null) return emptyList()
         val rows = mutableListOf<HourlyRow>()
@@ -846,8 +876,15 @@ class NwsApi(
             for (i in 0 until times.length()) {
                 val temp = optInt(temps, i)
                 val rh = optInt(humidity, i)
-                val wspd = optInt(winds, i)
-                val digitalGust = optInt(gusts, i)
+                // digitalJSON wind stays in mph even when unit=1. Temps follow unit.
+                val wspdMph = optInt(winds, i)
+                val wspd = if (metric) wspdMph?.let { WeatherMath.mphToKmh(it.toDouble()) } else wspdMph
+                val digitalGustMph = optInt(gusts, i)
+                val digitalGust = if (metric) {
+                    digitalGustMph?.let { WeatherMath.mphToKmh(it.toDouble()) }
+                } else {
+                    digitalGustMph
+                }
 
                 // Prefer anchored timeline; fall back to (unreliable) unixtime only if needed
                 val epochSec = nextEpoch ?: optLong(unix, i)
@@ -860,12 +897,17 @@ class NwsApi(
                 val gust = digitalGust ?: gridGust
 
                 val dew = epochHour?.let { grid.dewPointF[it]?.roundToInt() }
-                    ?: WeatherMath.dewPointF(temp, rh)
+                    ?: dewPoint(temp, rh, metric)
 
                 val precipIn = epochHour?.let { hour ->
-                    grid.qpfInches[hour]?.let { inches ->
-                        if (inches <= 0.0) null
-                        else String.format(Locale.US, "%.2f in", inches)
+                    grid.qpfInches[hour]?.let { amount ->
+                        if (amount <= 0.0) {
+                            null
+                        } else if (metric) {
+                            String.format(Locale.US, "%.1f mm", amount)
+                        } else {
+                            String.format(Locale.US, "%.2f in", amount)
+                        }
                     }
                 }
 
@@ -876,7 +918,7 @@ class NwsApi(
                     periodLabel = periodName,
                     timeLabel = tLabel,
                     temperatureF = temp,
-                    feelsLikeF = WeatherMath.feelsLikeF(temp, rh, wspd),
+                    feelsLikeF = feelsLike(temp, rh, wspd, metric),
                     dewPointF = dew,
                     popPct = pop,
                     precipIn = precipIn,
@@ -893,6 +935,27 @@ class NwsApi(
         }
 
         return rows.sortedBy { it.epochSec ?: Long.MAX_VALUE }
+    }
+
+    /** Feels-like in the snapshot unit. [temp] and [wind] are already in that unit. */
+    private fun feelsLike(temp: Int?, rh: Int?, wind: Int?, metric: Boolean): Int? {
+        if (!metric) return WeatherMath.feelsLikeF(temp, rh, wind)
+        val feelsF = WeatherMath.feelsLikeF(
+            temp?.let { WeatherMath.celsiusToF(it.toDouble()) },
+            rh,
+            wind?.let { WeatherMath.kmhToMph(it.toDouble()) },
+        )
+        return feelsF?.let { WeatherMath.fahrenheitToC(it.toDouble()) }
+    }
+
+    /** Dew point in the snapshot unit when the grid value is missing. */
+    private fun dewPoint(temp: Int?, rh: Int?, metric: Boolean): Int? {
+        if (!metric) return WeatherMath.dewPointF(temp, rh)
+        val dewF = WeatherMath.dewPointF(
+            temp?.let { WeatherMath.celsiusToF(it.toDouble()) },
+            rh,
+        )
+        return dewF?.let { WeatherMath.fahrenheitToC(it.toDouble()) }
     }
 
     /** Ordered digitalJSON period object keys (Tonight, Monday, …). */
@@ -1050,6 +1113,10 @@ class NwsApi(
         }
     }
 
+    /**
+     * Grid values in the requested unit system.
+     * US: inches, mph, °F, miles. Metric: mm, km/h, °C, km.
+     */
     private data class GridSeries(
         val qpfInches: Map<Long, Double>,
         val gustMph: Map<Long, Double>,
@@ -1063,7 +1130,7 @@ class NwsApi(
 
     companion object {
         const val USER_AGENT =
-            "PointForecast/1.1.7 (Android; open-source; https://github.com/crome1394/point-forecast)"
+            "PointForecast/1.1.11 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

@@ -108,6 +108,7 @@ fun SunMoonScreen(
     ) -> Unit)? = null,
     mapFocusRadiusMiles: Int = 250,
     hazardHistoryDays: Int = 7,
+    metricUnits: Boolean = false,
     onEnsureSpaceWeather: (() -> Unit)? = null,
     /** Reverse-geocode lat/lon → place name for historical tornado rows. */
     onResolveTornadoPlace: (suspend (lat: Double, lon: Double) -> String)? = null,
@@ -136,6 +137,7 @@ fun SunMoonScreen(
             onExploreParams = { r, d, s, e -> onEnsureEarthquakes?.invoke(r, d, s, e) },
             favorites = favorites,
             onSelectCity = onSelectHazardCity,
+            metricUnits = metricUnits,
         )
         return
     }
@@ -152,6 +154,7 @@ fun SunMoonScreen(
             onResolvePlace = onResolveTornadoPlace,
             favorites = favorites,
             onSelectCity = onSelectHazardCity,
+            metricUnits = metricUnits,
         )
         return
     }

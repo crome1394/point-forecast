@@ -54,7 +54,8 @@
   - Hazard maps with push-pin markers, explore radius, and history windows
   - Tropical cyclone + tornado filters
 - **Home screen widget** with bundled NWS icons (works well on CalyxOS)
-- **Settings** for title bar, hourly tabs, drawer, map focus radius, hazard defaults, and more
+- **Units** switch: US customary (°F, mph, inches, miles) or metric (°C, km/h, mm, km), including NWS forecast text and earthquake / severe-weather distances
+- **Settings** for units, title bar, hourly tabs, drawer, map focus radius, hazard defaults, and more
 
 | | |
 |---|---|

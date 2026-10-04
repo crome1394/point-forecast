@@ -42,6 +42,7 @@ import com.crome.forecastpoint.data.HourlyTabConfigItem
 import com.crome.forecastpoint.data.SpaceWeatherService
 import com.crome.forecastpoint.data.TideInfo
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
+import com.crome.forecastpoint.util.Units
 import com.crome.forecastpoint.util.WeatherMath
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -128,6 +129,10 @@ fun HourlyScreen(
      * time like the forecast card and Sun/Moon — not the device zone.
      */
     timeZoneId: String? = null,
+    /** User setting. May differ from [storedMetric] until a reload finishes. */
+    metricUnits: Boolean = false,
+    /** Unit system of [hourly] values (snapshot). */
+    storedMetric: Boolean = false,
 ) {
     val hasLocalHourly = hourly.isNotEmpty()
     val stationTz = remember(timeZoneId) {
@@ -156,12 +161,16 @@ fun HourlyScreen(
         tabs,
         spaceWeather,
         stationTz,
+        metricUnits,
+        storedMetric,
     ) {
         buildTabModels(
             hourly = hourly,
             tabs = tabs,
             spaceWeather = spaceWeather,
             timeZone = stationTz,
+            metricUnits = metricUnits,
+            storedMetric = storedMetric,
         )
     }
     Column(
@@ -215,7 +224,7 @@ fun HourlyScreen(
         }
 
         when (tabs.getOrNull(pagerState.currentPage)) {
-            HourlyTab.Tides -> TideStationBar(tideInfo)
+            HourlyTab.Tides -> TideStationBar(tideInfo, metricUnits)
             HourlyTab.SpaceWeather -> SpaceWeatherBar(spaceWeather)
             else -> Unit
         }
@@ -240,7 +249,7 @@ fun HourlyScreen(
 }
 
 @Composable
-private fun TideStationBar(tideInfo: TideInfo?) {
+private fun TideStationBar(tideInfo: TideInfo?, metricUnits: Boolean) {
     val kind = when (tideInfo?.sourceKind) {
         "usgs" -> "River / lake stage (USGS)"
         "waterlevel" -> "Water level (NOAA)"
@@ -258,7 +267,9 @@ private fun TideStationBar(tideInfo: TideInfo?) {
         !tideInfo.unavailableReason.isNullOrBlank() ->
             "$kind: ${tideInfo.unavailableReason}"
         else ->
-            "$kind · ${tideInfo.stationName} · ${"%.0f".format(tideInfo.distanceMiles)} mi · $datum ft · " +
+            "$kind · ${tideInfo.stationName} · " +
+                "${Units.distanceFromMiles(tideInfo.distanceMiles, metricUnits)} · " +
+                "$datum ${if (metricUnits) "m" else "ft"} · " +
                 "Height + Rising/Falling (NOAA includes subordinate/offset stations)"
     }
     Text(
@@ -368,11 +379,13 @@ private fun buildTabModels(
     tabs: List<HourlyTab>,
     spaceWeather: SpaceWeatherService.Snapshot? = null,
     timeZone: TimeZone = TimeZone.getDefault(),
+    metricUnits: Boolean = false,
+    storedMetric: Boolean = false,
 ): List<TabModel> {
     if (tabs.isEmpty()) return emptyList()
     val times = hourly.map { formatTimeLabel(it, timeZone) }
     return tabs.mapNotNull { tab ->
-        buildTabModel(tab, hourly, times, spaceWeather)
+        buildTabModel(tab, hourly, times, spaceWeather, metricUnits, storedMetric)
     }
 }
 
@@ -381,6 +394,8 @@ private fun buildTabModel(
     hourly: List<HourlyRow>,
     times: List<String>,
     spaceWeather: SpaceWeatherService.Snapshot?,
+    metricUnits: Boolean,
+    storedMetric: Boolean,
 ): TabModel? {
     if (tab == HourlyTab.SpaceWeather) {
         val periods = spaceWeather?.periods.orEmpty()
@@ -423,15 +438,21 @@ private fun buildTabModel(
                     time = times[i],
                     cells = listOf(
                         ColoredCell(
-                            row.temperatureF?.let { "$it° F" }.orEmpty(),
-                            temperatureColor(row.temperatureF),
+                            row.temperatureF?.let {
+                                Units.temperature(it, storedMetric, metricUnits)
+                            }.orEmpty(),
+                            temperatureColor(Units.toFahrenheit(row.temperatureF, storedMetric)),
                         ),
                         ColoredCell(
-                            row.feelsLikeF?.let { "$it° F" }.orEmpty(),
-                            temperatureColor(row.feelsLikeF),
+                            row.feelsLikeF?.let {
+                                Units.temperature(it, storedMetric, metricUnits)
+                            }.orEmpty(),
+                            temperatureColor(Units.toFahrenheit(row.feelsLikeF, storedMetric)),
                         ),
                         ColoredCell(
-                            row.dewPointF?.let { "$it° F" }.orEmpty(),
+                            row.dewPointF?.let {
+                                Units.temperature(it, storedMetric, metricUnits)
+                            }.orEmpty(),
                             DewPointBlue,
                         ),
                     ),
@@ -445,7 +466,10 @@ private fun buildTabModel(
                     time = times[i],
                     cells = listOf(
                         ColoredCell(row.popPct?.let { "$it%" }.orEmpty(), popColor(row.popPct)),
-                        ColoredCell(row.precipIn.orEmpty(), PopBlue),
+                        ColoredCell(
+                            Units.precipitation(row.precipIn, storedMetric, metricUnits),
+                            PopBlue,
+                        ),
                         ColoredCell(
                             row.cloudCoverPct?.let { "$it%" }.orEmpty(),
                             Color(0xFFB0BEC5),
@@ -464,8 +488,14 @@ private fun buildTabModel(
                 HourlyTableRow(
                     time = times[i],
                     cells = listOf(
-                        ColoredCell(row.windSpeedMph?.let { "$it mph" }.orEmpty(), WindWhite),
-                        ColoredCell(row.windGustMph?.let { "$it mph" }.orEmpty(), Color(0xFFFFCC80)),
+                        ColoredCell(
+                            Units.wind(row.windSpeedMph, storedMetric, metricUnits).orEmpty(),
+                            WindWhite,
+                        ),
+                        ColoredCell(
+                            Units.wind(row.windGustMph, storedMetric, metricUnits).orEmpty(),
+                            Color(0xFFFFCC80),
+                        ),
                         ColoredCell(row.windDirection.orEmpty(), Color(0xFF80DEEA)),
                     ),
                 )
@@ -483,7 +513,7 @@ private fun buildTabModel(
                     time = times[i],
                     cells = listOf(
                         ColoredCell(
-                            row.tideFt?.let { String.format(Locale.US, "%.2f ft", it) }.orEmpty(),
+                            Units.tideHeight(row.tideFt, storedMetric, metricUnits),
                             TideTeal,
                         ),
                         ColoredCell(row.tideTrend.orEmpty(), trendColor),
@@ -518,15 +548,15 @@ private fun buildTabModel(
             },
         )
         HourlyTab.Visibility -> TabModel(
-            headers = listOf("Visibility", "Miles"),
+            headers = listOf("Visibility", if (metricUnits) "km" else "Miles"),
             rows = hourly.mapIndexed { i, row ->
-                val mi = row.visibilityMi
+                val mi = Units.toMiles(row.visibilityMi, storedMetric)
                 HourlyTableRow(
                     time = times[i],
                     cells = listOf(
                         ColoredCell(visibilityLabel(mi), visibilityColor(mi)),
                         ColoredCell(
-                            mi?.let { String.format(Locale.US, "%.1f mi", it) }.orEmpty(),
+                            Units.visibilityAmount(row.visibilityMi, storedMetric, metricUnits),
                             Color(0xFF80DEEA),
                         ),
                     ),
@@ -534,14 +564,20 @@ private fun buildTabModel(
             },
         )
         HourlyTab.Pressure -> TabModel(
-            headers = listOf("Pressure", "in Hg"),
+            headers = listOf(if (metricUnits) "hPa" else "Pressure", "in Hg"),
             rows = hourly.mapIndexed { i, row ->
                 val mb = row.pressureMb
                 HourlyTableRow(
                     time = times[i],
                     cells = listOf(
                         ColoredCell(
-                            mb?.let { String.format(Locale.US, "%.0f mb", it) }.orEmpty(),
+                            mb?.let {
+                                String.format(
+                                    Locale.US,
+                                    if (metricUnits) "%.0f hPa" else "%.0f mb",
+                                    it,
+                                )
+                            }.orEmpty(),
                             Color(0xFFCE93D8),
                         ),
                         ColoredCell(

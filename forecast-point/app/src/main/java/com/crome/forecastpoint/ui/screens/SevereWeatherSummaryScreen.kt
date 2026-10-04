@@ -60,6 +60,7 @@ import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
 import com.crome.forecastpoint.util.MapHelpers
 import com.crome.forecastpoint.util.MapTiles
+import com.crome.forecastpoint.util.Units
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -92,6 +93,7 @@ fun SevereWeatherSummaryScreen(
     onResolvePlace: (suspend (lat: Double, lon: Double) -> String)? = null,
     favorites: List<SavedLocation> = emptyList(),
     onSelectCity: (SavedLocation) -> Unit = {},
+    metricUnits: Boolean = false,
 ) {
     var aboutExpanded by remember { mutableStateOf(false) }
     var settingsExpanded by remember { mutableStateOf(false) }
@@ -176,8 +178,13 @@ fun SevereWeatherSummaryScreen(
     } else {
         formatHistoryDays(historyDays)
     }
+    val radiusLabel = if (metricUnits) {
+        Units.hazardRadiusLabel(exploreRadius, displayMetric = true)
+    } else {
+        "$exploreRadius mi"
+    }
     val settingsSummary =
-        "$historySummary · $exploreRadius mi · " +
+        "$historySummary · $radiusLabel · " +
             "${tropicalLabel(minWindKt.roundToInt())} · ${tornadoLabel(minTornadoEf.roundToInt())}"
 
     fun resetHazardSettings() {
@@ -243,6 +250,7 @@ fun SevereWeatherSummaryScreen(
                 storms = filteredStorms,
                 tornadoes = filteredTornadoes.take(25),
                 focusRadiusMiles = exploreRadius,
+                metricUnits = metricUnits,
                 onExpandFullscreen = { mapFullscreen = true },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -264,6 +272,7 @@ fun SevereWeatherSummaryScreen(
                         storms = filteredStorms,
                         tornadoes = filteredTornadoes.take(25),
                         focusRadiusMiles = exploreRadius,
+                        metricUnits = metricUnits,
                         onExpandFullscreen = null,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -300,6 +309,7 @@ fun SevereWeatherSummaryScreen(
                 exploreRadiusMiles = exploreRadius,
                 settingsDefaultMiles = settingsDefaultRadiusMiles,
                 onRadiusChange = { exploreRadius = it },
+                metricUnits = metricUnits,
                 accent = StormAccent,
                 title = "Explore distance",
                 subtitle = "Ad-hoc look-around — does not change app Settings",
@@ -355,9 +365,12 @@ fun SevereWeatherSummaryScreen(
         }
 
         Text(
-            snapshot?.querySummary
-                ?: "Within $exploreRadius mi · last $historyDays d · " +
-                "${tropicalLabel(minWindKt.roundToInt())} · ${tornadoLabel(minTornadoEf.roundToInt())}",
+            Units.relabelMiles(
+                snapshot?.querySummary
+                    ?: "Within $exploreRadius mi · last $historyDays d · " +
+                    "${tropicalLabel(minWindKt.roundToInt())} · ${tornadoLabel(minTornadoEf.roundToInt())}",
+                metricUnits,
+            ),
             color = OnSurfaceMuted,
             fontSize = 11.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -379,12 +392,13 @@ fun SevereWeatherSummaryScreen(
         }
 
         SevereReportsSection(
-            subtitle = "NWS · NHC · SPC · $historySummary · within $exploreRadius mi · " +
+            subtitle = "NWS · NHC · SPC · $historySummary · within $radiusLabel · " +
                 "${tropicalLabel(minWindKt.roundToInt())} · ${tornadoLabel(minTornadoEf.roundToInt())}",
             reports = combinedReports,
             resolvedPlaces = resolvedPlaces,
+            metricUnits = metricUnits,
             emptyMessage = "No watches, tropical cyclones, or tornado reports match these filters " +
-                "within $exploreRadius mi.",
+                "within $radiusLabel.",
             onOpenUrl = { uriHandler.openUri(it) },
         )
 
@@ -430,7 +444,11 @@ fun SevereWeatherSummaryScreen(
                             "Terms & scales\n" +
                             "• kt (knots) — wind speed (~1.15 mph). TS ≈ 34+ kt; hurricane ≈ 64+ kt.\n" +
                             "• EF scale — tornado damage EF0–EF5 (UNK = not rated yet).\n" +
-                            "• mi — miles from your selected city (straight-line).\n" +
+                            (if (metricUnits) {
+                                "• km — kilometers from your selected city (straight-line).\n"
+                            } else {
+                                "• mi — miles from your selected city (straight-line).\n"
+                            }) +
                             "  For Tropical rows this is the **current** NHC center, not the " +
                             "storm’s closest historical approach.\n\n" +
                             "Settings on this screen are temporary (do not change app Settings defaults).\n\n" +
@@ -502,6 +520,7 @@ private fun SevereReportsSection(
     subtitle: String,
     reports: List<SevereListItem>,
     resolvedPlaces: Map<String, String>,
+    metricUnits: Boolean,
     emptyMessage: String,
     onOpenUrl: (String) -> Unit,
 ) {
@@ -536,15 +555,21 @@ private fun SevereReportsSection(
                 Row(Modifier.fillMaxWidth()) {
                     Text("Type", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(56.dp))
                     Text("Report", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("Mi", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(36.dp))
+                    Text(
+                        Units.hazardDistanceHeader(metricUnits),
+                        color = OnSurfaceMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.width(48.dp),
+                    )
                 }
                 reports.forEach { item ->
                     when (item) {
                         is SevereListItem.Alert -> AlertReportRow(item.data)
-                        is SevereListItem.Tropical -> TropicalReportRow(item.data, onOpenUrl)
+                        is SevereListItem.Tropical -> TropicalReportRow(item.data, metricUnits, onOpenUrl)
                         is SevereListItem.Tornado -> TornadoReportRow(
                             r = item.data,
                             resolvedPlace = resolvedPlaces[item.data.id],
+                            metricUnits = metricUnits,
                             onOpenUrl = onOpenUrl,
                         )
                     }
@@ -591,13 +616,14 @@ private fun AlertReportRow(a: SevereWeatherService.ActiveAlert) {
                 fontSize = 11.sp,
             )
         }
-        Text("—", color = OnSurfaceMuted, fontSize = 13.sp, modifier = Modifier.width(36.dp))
+        Text("—", color = OnSurfaceMuted, fontSize = 13.sp, modifier = Modifier.width(48.dp))
     }
 }
 
 @Composable
 private fun TropicalReportRow(
     s: SevereWeatherService.TropicalStorm,
+    metricUnits: Boolean,
     onOpenUrl: (String) -> Unit,
 ) {
     Row(
@@ -625,7 +651,7 @@ private fun TropicalReportRow(
                 fontSize = 13.sp,
             )
             Text(
-                "Current center · ${String.format(Locale.US, "%.0f", s.distanceMiles)} mi from city",
+                "Current center · ${Units.distanceFromMiles(s.distanceMiles, metricUnits)} from city",
                 color = OnSurfaceMuted,
                 fontSize = 12.sp,
             )
@@ -650,10 +676,10 @@ private fun TropicalReportRow(
             )
         }
         Text(
-            String.format(Locale.US, "%.0f", s.distanceMiles),
+            Units.hazardDistanceAmount(s.distanceMiles, metricUnits),
             color = OnSurfaceMuted,
             fontSize = 13.sp,
-            modifier = Modifier.width(36.dp),
+            modifier = Modifier.width(48.dp),
         )
     }
 }
@@ -662,6 +688,7 @@ private fun TropicalReportRow(
 private fun TornadoReportRow(
     r: SevereWeatherService.TornadoReport,
     resolvedPlace: String?,
+    metricUnits: Boolean,
     onOpenUrl: (String) -> Unit,
 ) {
     val typeLabel = when {
@@ -728,10 +755,10 @@ private fun TornadoReportRow(
             }
         }
         Text(
-            String.format(Locale.US, "%.0f", r.distanceMiles),
+            Units.hazardDistanceAmount(r.distanceMiles, metricUnits),
             color = OnSurfaceMuted,
             fontSize = 13.sp,
-            modifier = Modifier.width(36.dp),
+            modifier = Modifier.width(48.dp),
         )
     }
 }
@@ -764,6 +791,7 @@ private fun StormMap(
     storms: List<SevereWeatherService.TropicalStorm>,
     tornadoes: List<SevereWeatherService.TornadoReport>,
     focusRadiusMiles: Int,
+    metricUnits: Boolean,
     onExpandFullscreen: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -781,7 +809,7 @@ private fun StormMap(
         }
     }
 
-    LaunchedEffect(centerLat, centerLon, storms, tornadoes, focusRadiusMiles) {
+    LaunchedEffect(centerLat, centerLon, storms, tornadoes, focusRadiusMiles, metricUnits) {
         mapView.overlays.removeAll { it is Marker }
         // Selected city: red push pin
         mapView.overlays.add(
@@ -797,7 +825,8 @@ private fun StormMap(
                 Marker(mapView).apply {
                     position = GeoPoint(s.latitude, s.longitude)
                     title = "${s.name} (${s.classification})"
-                    snippet = "${s.intensityKt ?: "—"} kt · ${"%.0f".format(s.distanceMiles)} mi"
+                    snippet = "${s.intensityKt ?: "—"} kt · " +
+                        Units.distanceFromMiles(s.distanceMiles, metricUnits)
                     MapHelpers.applyPushPin(this, context, R.drawable.ic_map_storm_pin)
                 },
             )
@@ -808,7 +837,7 @@ private fun StormMap(
                 Marker(mapView).apply {
                     position = GeoPoint(t.latitude, t.longitude)
                     title = "Tornado ${t.fScale} · ${t.location}"
-                    snippet = "${t.state} · ${"%.0f".format(t.distanceMiles)} mi"
+                    snippet = "${t.state} · ${Units.distanceFromMiles(t.distanceMiles, metricUnits)}"
                     MapHelpers.applyPushPin(this, context, R.drawable.ic_map_report_pin)
                 },
             )
@@ -847,7 +876,8 @@ private fun StormMap(
                 Icon(Icons.Filled.Place, null, tint = Color(0xFFE53935), modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    "Red = city · cyan = storms · green = reports · ${focusRadiusMiles} mi",
+                    "Red = city · cyan = storms · green = reports · " +
+                        Units.hazardRadiusLabel(focusRadiusMiles, metricUnits),
                     color = Color(0xFF263238),
                     fontSize = 11.sp,
                 )

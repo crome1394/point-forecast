@@ -139,7 +139,17 @@ data class WeatherSnapshot(
     val tideInfo: TideInfo? = null,
     /** IANA or GMT offset id for the forecast point (from NWS when available). */
     val timeZoneId: String? = null,
-)
+    /**
+     * Unit system of the numeric weather fields and NWS forecast text.
+     * `"us"` (default, including caches from before the units setting) or `"metric"`.
+     * Temperature, wind, precipitation, visibility, and tide height follow this.
+     * Elevation and tide-station distance stay in feet and miles.
+     * Hourly pressure stays in hPa / mb.
+     */
+    val unitSystem: String = UnitSystem.Us.storageValue,
+) {
+    val units: UnitSystem get() = UnitSystem.fromStorage(unitSystem)
+}
 
 data class GeocodeResult(
     val name: String,

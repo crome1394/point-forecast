@@ -38,6 +38,8 @@ class PreferencesRepository(private val context: Context) {
     private val keyFavorites = stringPreferencesKey("favorites_json")
     private val keyLastSnapshot = stringPreferencesKey("last_snapshot_json")
     private val keyUseFahrenheit = booleanPreferencesKey("use_fahrenheit")
+    /** "us" or "metric". Supersedes [keyUseFahrenheit] when present. */
+    private val keyUnitSystem = stringPreferencesKey("unit_system")
     private val keyTransientLoc = stringPreferencesKey("transient_location_json")
     private val keyTitleBarBottom = booleanPreferencesKey("title_bar_bottom")
     private val keyWidgetShowHighLow = booleanPreferencesKey("widget_show_high_low")
@@ -78,8 +80,16 @@ class PreferencesRepository(private val context: Context) {
     val updateIntervalMinutes: Flow<Int> =
         context.dataStore.data.map { it[keyIntervalMin] ?: DEFAULT_INTERVAL_MIN }
 
-    val useFahrenheit: Flow<Boolean> =
-        context.dataStore.data.map { it[keyUseFahrenheit] ?: true }
+    val unitSystem: Flow<UnitSystem> =
+        context.dataStore.data.map { prefs ->
+            when (prefs[keyUnitSystem]) {
+                UnitSystem.Metric.storageValue -> UnitSystem.Metric
+                UnitSystem.Us.storageValue -> UnitSystem.Us
+                else -> if (prefs[keyUseFahrenheit] == false) UnitSystem.Metric else UnitSystem.Us
+            }
+        }
+
+    val useFahrenheit: Flow<Boolean> = unitSystem.map { !it.isMetric }
 
     /** When true, main title/actions bar is docked at the bottom of the screen. */
     val titleBarAtBottom: Flow<Boolean> =
@@ -249,8 +259,17 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[keyIntervalMin] = minutes.coerceIn(15, 24 * 60) }
     }
 
+    suspend fun setUnitSystem(system: UnitSystem) {
+        context.dataStore.edit {
+            it[keyUnitSystem] = system.storageValue
+            it[keyUseFahrenheit] = !system.isMetric
+        }
+    }
+
+    suspend fun getUnitSystemOnce(): UnitSystem = unitSystem.first()
+
     suspend fun setUseFahrenheit(use: Boolean) {
-        context.dataStore.edit { it[keyUseFahrenheit] = use }
+        setUnitSystem(if (use) UnitSystem.Us else UnitSystem.Metric)
     }
 
     suspend fun setTitleBarAtBottom(bottom: Boolean) {

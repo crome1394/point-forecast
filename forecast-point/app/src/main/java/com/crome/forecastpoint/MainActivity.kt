@@ -141,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 val mapSearchAtBottom by viewModel.mapSearchAtBottom.collectAsState()
                 val expandCurrentConditions by viewModel.expandCurrentConditions.collectAsState()
                 val expandAdvisories by viewModel.expandAdvisories.collectAsState()
+                val metricUnits by viewModel.metricUnits.collectAsState()
                 val showTitleSearch by viewModel.showTitleSearch.collectAsState()
                 val showTitleSunMoon by viewModel.showTitleSunMoon.collectAsState()
                 val hourlyTabConfig by viewModel.hourlyTabConfig.collectAsState()
@@ -561,6 +562,7 @@ class MainActivity : ComponentActivity() {
                                     isFavorite = favorites.any { it.id == activeId },
                                     expandCurrentConditions = expandCurrentConditions,
                                     expandAdvisories = expandAdvisories,
+                                    metricUnits = metricUnits,
                                     onToggleFavorite = { viewModel.toggleActiveFavorite() },
                                     onOpenHourly = { screen = AppScreen.Hourly },
                                     onDayClick = { screen = AppScreen.Hourly },
@@ -578,6 +580,8 @@ class MainActivity : ComponentActivity() {
                                         spaceWeather = spaceWeather,
                                         tabConfig = hourlyTabConfig,
                                         timeZoneId = snapshot?.timeZoneId,
+                                        metricUnits = metricUnits,
+                                        storedMetric = snapshot?.units?.isMetric == true,
                                     )
                                 }
                                 AppScreen.Search -> SearchScreen(
@@ -618,6 +622,7 @@ class MainActivity : ComponentActivity() {
                                     drawerNavConfig = drawerNavConfig,
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
                                     hazardHistoryDays = hazardHistoryDays,
+                                    metricUnits = metricUnits,
                                     spaceWeatherWatchThreshold = spaceWeatherWatchThreshold,
                                     spaceWeatherActiveThreshold = spaceWeatherActiveThreshold,
                                     spaceWeatherForecastHorizonHours = spaceWeatherForecastHorizonHours,
@@ -640,6 +645,7 @@ class MainActivity : ComponentActivity() {
                                     onHazardHistoryDaysChange = {
                                         viewModel.setHazardHistoryDays(it)
                                     },
+                                    onMetricUnitsChange = { viewModel.setMetricUnits(it) },
                                     onSpaceWeatherWatchThresholdChange = {
                                         viewModel.setSpaceWeatherWatchThreshold(it)
                                     },
@@ -691,6 +697,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     mapFocusRadiusMiles = mapFocusRadiusMiles,
                                     hazardHistoryDays = hazardHistoryDays,
+                                    metricUnits = metricUnits,
                                     onEnsureSpaceWeather = { viewModel.ensureSpaceWeather() },
                                     onResolveTornadoPlace = { lat, lon ->
                                         viewModel.reverseGeocode(lat, lon).name

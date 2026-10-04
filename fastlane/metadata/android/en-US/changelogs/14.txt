@@ -1,0 +1,5 @@
+• Settings: choose US customary or metric units
+• Temperature, wind, rain, visibility, pressure, tides, elevation, and the widget follow the choice
+• Earthquake, severe-weather, and map-focus distances follow the choice
+• NWS forecast text reloads in the unit system you pick
+• Tropical cyclone wind stays in knots

@@ -7,6 +7,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.11] — 2026-10-03
+
+### Added
+
+- Settings → Units: switch between US customary (°F, mph, inches, miles) and metric (°C, km/h, mm, km, hPa)
+- Temperature, wind, precipitation, visibility, pressure, tides / water level, elevation, and the home screen widget follow that choice
+- NWS forecast text reloads in the selected system (MapClick `unit=0` or `unit=1`)
+- Earthquake reports, severe-weather reports, their on-screen distance settings, and Settings → Map focus radius follow that choice. Tropical cyclone wind stays in knots
+
 ## [1.1.10] — 2026-08-30
 
 ### Added

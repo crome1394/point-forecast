@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.SurfaceDark
+import com.crome.forecastpoint.util.Units
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -425,6 +426,7 @@ fun HazardExploreRadiusCard(
     settingsDefaultMiles: Int,
     onRadiusChange: (Int) -> Unit,
     accent: Color,
+    metricUnits: Boolean = false,
     title: String = "Explore radius",
     subtitle: String = "Ad-hoc only — does not change Settings default",
     compact: Boolean = false,
@@ -461,7 +463,7 @@ fun HazardExploreRadiusCard(
                     color = accent.copy(alpha = 0.22f),
                 ) {
                     Text(
-                        formatMiles(exploreRadiusMiles),
+                        Units.hazardRadiusLabel(exploreRadiusMiles, metricUnits),
                         color = accent,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
@@ -498,7 +500,7 @@ fun HazardExploreRadiusCard(
                             .clickable { onRadiusChange(miles) },
                     ) {
                         Text(
-                            formatMilesShort(miles),
+                            Units.hazardRadiusLabel(miles, metricUnits, compact = true),
                             color = if (selected) Color.White else OnSurfaceMuted,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                             fontSize = 13.sp,
@@ -520,7 +522,11 @@ fun HazardExploreRadiusCard(
                         .clickable { showCustomRadius = true },
                 ) {
                     Text(
-                        if (isCustomRadius) formatMilesShort(exploreRadiusMiles) else "Custom",
+                        if (isCustomRadius) {
+                            Units.hazardRadiusLabel(exploreRadiusMiles, metricUnits, compact = true)
+                        } else {
+                            "Custom"
+                        },
                         color = if (isCustomRadius) Color.White else OnSurfaceMuted,
                         fontWeight = if (isCustomRadius) FontWeight.SemiBold else FontWeight.Normal,
                         fontSize = 13.sp,
@@ -531,7 +537,7 @@ fun HazardExploreRadiusCard(
             if (exploreRadiusMiles != settingsDefaultMiles) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Settings default stays ${formatMiles(settingsDefaultMiles)} · this is temporary",
+                    "Settings default stays ${Units.hazardRadiusLabel(settingsDefaultMiles, metricUnits)} · this is temporary",
                     color = OnSurfaceMuted,
                     fontSize = 11.sp,
                 )
@@ -539,6 +545,7 @@ fun HazardExploreRadiusCard(
             if (showCustomRadius) {
                 HazardCustomRadiusDialog(
                     accent = accent,
+                    metricUnits = metricUnits,
                     // Always start blank so focus/typing is not fighting a prefilled value
                     initialMiles = null,
                     onDismiss = { showCustomRadius = false },
@@ -755,16 +762,18 @@ fun HazardHistoryDaysCard(
 }
 
 /**
- * Custom explore distance: miles field starts empty and clears again on focus
- * so typing is not fighting a prefilled value.
+ * Custom explore distance. The field uses miles or kilometers to match the
+ * unit setting, starts empty, and clears again on focus.
  */
 @Composable
 private fun HazardCustomRadiusDialog(
     accent: Color,
+    metricUnits: Boolean,
     initialMiles: Int?,
     onDismiss: () -> Unit,
     onConfirm: (miles: Int) -> Unit,
 ) {
+    val bounds = Units.hazardRadiusEntryBounds(metricUnits)
     var text by remember {
         mutableStateOf(initialMiles?.toString().orEmpty())
     }
@@ -777,9 +786,9 @@ private fun HazardCustomRadiusDialog(
     }
 
     fun tryConfirm() {
-        val miles = text.trim().toIntOrNull()
-        if (miles != null && miles in 25..4000) {
-            onConfirm(miles)
+        val entered = text.trim().toIntOrNull()
+        if (entered != null && entered in bounds) {
+            onConfirm(Units.hazardRadiusEntryToMiles(entered, metricUnits))
         }
     }
 
@@ -791,7 +800,11 @@ private fun HazardCustomRadiusDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Enter miles from the selected city (25–4000).",
+                    if (metricUnits) {
+                        "Enter kilometers from the selected city (${bounds.first}–${bounds.last})."
+                    } else {
+                        "Enter miles from the selected city (${bounds.first}–${bounds.last})."
+                    },
                     color = OnSurfaceMuted,
                     fontSize = 13.sp,
                 )
@@ -801,8 +814,8 @@ private fun HazardCustomRadiusDialog(
                         text = raw.filter { it.isDigit() }.take(4)
                     },
                     singleLine = true,
-                    label = { Text("Miles") },
-                    placeholder = { Text("e.g. 40") },
+                    label = { Text(if (metricUnits) "Kilometers" else "Miles") },
+                    placeholder = { Text(if (metricUnits) "e.g. 80" else "e.g. 40") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done,
@@ -827,13 +840,13 @@ private fun HazardCustomRadiusDialog(
             }
         },
         confirmButton = {
-            val miles = text.trim().toIntOrNull()
+            val entered = text.trim().toIntOrNull()
             TextButton(
                 onClick = {
                     keyboard?.hide()
                     tryConfirm()
                 },
-                enabled = miles != null && miles in 25..4000,
+                enabled = entered != null && entered in bounds,
             ) {
                 Text("Apply", color = accent)
             }
@@ -1031,13 +1044,7 @@ fun HazardFilterSliderCard(
     }
 }
 
-private fun formatMiles(miles: Int): String = when {
-    miles >= 1000 -> String.format(java.util.Locale.US, "%.1fk mi", miles / 1000.0)
-    else -> "$miles mi"
-}
 
-/** Short chip label; trailing "m" means miles (not meters/kilometers). */
-private fun formatMilesShort(miles: Int): String = "${miles}m"
 
 fun formatHistoryDays(days: Int): String = PreferencesRepository.historyDaysLabel(days)
 

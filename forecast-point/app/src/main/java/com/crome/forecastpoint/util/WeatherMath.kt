@@ -41,9 +41,19 @@ object WeatherMath {
 
     fun celsiusToF(c: Double): Int = (c * 9.0 / 5.0 + 32.0).roundToInt()
 
+    fun fahrenheitToC(f: Double): Int = ((f - 32.0) * 5.0 / 9.0).roundToInt()
+
     fun kmhToMph(kmh: Double): Int = (kmh * 0.621371).roundToInt()
 
+    fun mphToKmh(mph: Double): Int = (mph / 0.621371).roundToInt()
+
     fun mmToInches(mm: Double): Double = mm / 25.4
+
+    fun milesToKm(miles: Double): Double = miles * 1.609344
+
+    fun kmToMiles(km: Double): Double = km / 1.609344
+
+    fun feetToMeters(feet: Double): Double = feet * 0.3048
 
     fun degreesToCardinal(degrees: Int?): String? {
         if (degrees == null) return null

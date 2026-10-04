@@ -12,6 +12,7 @@ import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.SavedLocation
 import com.crome.forecastpoint.data.SevereWeatherService
 import com.crome.forecastpoint.data.SpaceWeatherService
+import com.crome.forecastpoint.data.UnitSystem
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.worker.WeatherUpdateScheduler
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -53,6 +55,9 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     val expandCurrentConditions =
         prefs.expandCurrentConditions.stateIn(viewModelScope, share, false)
     val expandAdvisories = prefs.expandAdvisories.stateIn(viewModelScope, share, true)
+    val metricUnits = prefs.unitSystem
+        .map { it.isMetric }
+        .stateIn(viewModelScope, share, false)
     val showTitleSearch = prefs.showTitleSearch.stateIn(viewModelScope, share, true)
     val showTitleSunMoon = prefs.showTitleSunMoon.stateIn(viewModelScope, share, true)
     val hourlyTabConfig = prefs.hourlyTabConfig.stateIn(
@@ -515,6 +520,14 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     fun setExpandAdvisories(expand: Boolean) {
         viewModelScope.launch {
             prefs.setExpandAdvisories(expand)
+        }
+    }
+
+    fun setMetricUnits(metric: Boolean) {
+        viewModelScope.launch {
+            prefs.setUnitSystem(if (metric) UnitSystem.Metric else UnitSystem.Us)
+            com.crome.forecastpoint.widget.WeatherWidgetUpdater.updateAll(getApplication())
+            runCatching { repo.refreshActive(manual = true) }
         }
     }
 

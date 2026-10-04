@@ -59,6 +59,7 @@ import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
 import com.crome.forecastpoint.util.MapHelpers
 import com.crome.forecastpoint.util.MapTiles
+import com.crome.forecastpoint.util.Units
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -88,6 +89,7 @@ fun EarthquakeSummaryScreen(
     ) -> Unit = { _, _, _, _ -> },
     favorites: List<SavedLocation> = emptyList(),
     onSelectCity: (SavedLocation) -> Unit = {},
+    metricUnits: Boolean = false,
 ) {
     var aboutExpanded by remember { mutableStateOf(false) }
     var settingsExpanded by remember { mutableStateOf(false) }
@@ -139,7 +141,12 @@ fun EarthquakeSummaryScreen(
     } else {
         formatHistoryDays(historyDays)
     }
-    val settingsSummary = "$historySummary · $exploreRadius mi · $magLabel"
+    val radiusLabel = if (metricUnits) {
+        Units.hazardRadiusLabel(exploreRadius, displayMetric = true)
+    } else {
+        "$exploreRadius mi"
+    }
+    val settingsSummary = "$historySummary · $radiusLabel · $magLabel"
 
     fun resetHazardSettings() {
         exploreRadius = settingsDefaultRadiusMiles
@@ -208,6 +215,7 @@ fun EarthquakeSummaryScreen(
                 recent = filteredReports.take(50),
                 historical = emptyList(),
                 focusRadiusMiles = exploreRadius,
+                metricUnits = metricUnits,
                 onExpandFullscreen = { mapFullscreen = true },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -225,6 +233,7 @@ fun EarthquakeSummaryScreen(
                         recent = filteredReports.take(50),
                         historical = emptyList(),
                         focusRadiusMiles = exploreRadius,
+                        metricUnits = metricUnits,
                         onExpandFullscreen = null,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -259,6 +268,7 @@ fun EarthquakeSummaryScreen(
                 exploreRadiusMiles = exploreRadius,
                 settingsDefaultMiles = settingsDefaultRadiusMiles,
                 onRadiusChange = { exploreRadius = it },
+                metricUnits = metricUnits,
                 accent = QuakeAccent,
                 title = "Explore distance",
                 subtitle = "Look around this city — temporary, not app Settings",
@@ -303,8 +313,11 @@ fun EarthquakeSummaryScreen(
         }
 
         Text(
-            snapshot?.querySummary
-                ?: "Within $exploreRadius mi · $historySummary · $magLabel",
+            Units.relabelMiles(
+                snapshot?.querySummary
+                    ?: "Within $exploreRadius mi · $historySummary · $magLabel",
+                metricUnits,
+            ),
             color = OnSurfaceMuted,
             fontSize = 11.sp,
             lineHeight = 14.sp,
@@ -316,10 +329,11 @@ fun EarthquakeSummaryScreen(
         // Single reports list (history window + magnitude filter)
         QuakeSection(
             title = "Earthquake reports",
-            subtitle = "USGS · $historySummary · within $exploreRadius mi · $magLabel · newest first",
+            subtitle = "USGS · $historySummary · within $radiusLabel · $magLabel · newest first",
             quakes = filteredReports,
             timeFmt = timeFmt,
-            emptyMessage = "No quakes at this magnitude within $exploreRadius mi for $historySummary.",
+            metricUnits = metricUnits,
+            emptyMessage = "No quakes at this magnitude within $radiusLabel for $historySummary.",
             onOpen = { url -> uriHandler.openUri(url) },
         )
 
@@ -363,7 +377,11 @@ fun EarthquakeSummaryScreen(
                             "major). Modern catalogs use moment magnitude.\n" +
                             "• Depth (km) — kilometers below the surface.\n" +
                             "• FDSN — Federation of Digital Seismograph Networks; USGS query API.\n" +
-                            "• mi — miles from your selected city (straight-line).\n\n" +
+                            (if (metricUnits) {
+                                "• km — kilometers from your selected city (straight-line).\n\n"
+                            } else {
+                                "• mi — miles from your selected city (straight-line).\n\n"
+                            }) +
                             "Settings on this screen\n" +
                             "Explore distance, history window, and magnitude filters are temporary. " +
                             "They do not change Settings → Map focus radius or Hazard history defaults.\n\n" +
@@ -385,6 +403,7 @@ private fun QuakeSection(
     subtitle: String,
     quakes: List<EarthquakeService.Quake>,
     timeFmt: SimpleDateFormat,
+    metricUnits: Boolean,
     emptyMessage: String,
     onOpen: (String) -> Unit,
 ) {
@@ -410,7 +429,12 @@ private fun QuakeSection(
                 Row(Modifier.fillMaxWidth()) {
                     Text("Mag", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
                     Text("When / where", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("Mi", color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
+                    Text(
+                        Units.hazardDistanceHeader(metricUnits),
+                        color = OnSurfaceMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.width(48.dp),
+                    )
                 }
                 quakes.forEach { q ->
                     Row(
@@ -439,10 +463,10 @@ private fun QuakeSection(
                             }
                         }
                         Text(
-                            String.format(Locale.US, "%.0f", q.distanceMiles),
+                            Units.hazardDistanceAmount(q.distanceMiles, metricUnits),
                             color = OnSurfaceMuted,
                             fontSize = 13.sp,
-                            modifier = Modifier.width(40.dp),
+                            modifier = Modifier.width(48.dp),
                         )
                     }
                 }
@@ -458,6 +482,7 @@ private fun EarthquakeMap(
     recent: List<EarthquakeService.Quake>,
     historical: List<EarthquakeService.Quake>,
     focusRadiusMiles: Int,
+    metricUnits: Boolean,
     onExpandFullscreen: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -531,7 +556,12 @@ private fun EarthquakeMap(
             ) {
                 Icon(Icons.Filled.Place, null, tint = Color(0xFFE53935), modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Red pin = city · green = reports · $focusRadiusMiles mi", color = Color(0xFF263238), fontSize = 11.sp)
+                Text(
+                    "Red pin = city · green = reports · " +
+                        Units.hazardRadiusLabel(focusRadiusMiles, metricUnits),
+                    color = Color(0xFF263238),
+                    fontSize = 11.sp,
+                )
             }
         }
         if (onExpandFullscreen != null) {

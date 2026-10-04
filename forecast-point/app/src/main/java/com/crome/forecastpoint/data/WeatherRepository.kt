@@ -72,12 +72,15 @@ class WeatherRepository(
         name: String?,
         manual: Boolean = false,
     ): WeatherSnapshot? = refreshMutex.withLock {
+        val units = prefs.getUnitSystemOnce()
         // Skip redundant background refresh if data is still fresh (< 2 min)
+        // and already in the selected unit system.
         if (!manual) {
             val current = _snapshot.value
             if (current != null &&
                 current.latitude == latitude &&
                 current.longitude == longitude &&
+                current.units == units &&
                 System.currentTimeMillis() - current.updatedAtEpochMs < STALE_MS
             ) {
                 return current
@@ -101,6 +104,7 @@ class WeatherRepository(
                 includeTides = includeTides,
                 includeOpenMeteoWeather = includeOpenMeteoWeather,
                 includeAirQuality = includeAirQuality,
+                metric = units.isMetric,
             )
             _snapshot.value = snap
             prefs.saveSnapshot(snap)

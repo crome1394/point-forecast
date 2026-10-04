@@ -39,6 +39,8 @@ class OpenMeteoService(
         longitude: Double,
         includeWeather: Boolean = true,
         includeAirQuality: Boolean = true,
+        /** When true, [HourlyExtras.visibilityMi] is kilometers instead of miles. */
+        metric: Boolean = false,
     ): HourlyExtras =
         withContext(Dispatchers.IO) {
             if (!includeWeather && !includeAirQuality) return@withContext HourlyExtras.EMPTY
@@ -47,7 +49,7 @@ class OpenMeteoService(
                     if (!includeWeather) {
                         HourlyExtras.EMPTY
                     } else {
-                        runCatching { fetchWeatherHourly(latitude, longitude) }
+                        runCatching { fetchWeatherHourly(latitude, longitude, metric) }
                             .getOrDefault(HourlyExtras.EMPTY)
                     }
                 }
@@ -71,7 +73,11 @@ class OpenMeteoService(
             }
         }
 
-    private fun fetchWeatherHourly(latitude: Double, longitude: Double): HourlyExtras {
+    private fun fetchWeatherHourly(
+        latitude: Double,
+        longitude: Double,
+        metric: Boolean,
+    ): HourlyExtras {
         val lat = String.format(Locale.US, "%.4f", latitude)
         val lon = String.format(Locale.US, "%.4f", longitude)
         val url =
@@ -90,7 +96,7 @@ class OpenMeteoService(
         for (i in 0 until times.length()) {
             val epoch = parseUtcHour(times.optString(i)) ?: continue
             vis?.optDouble(i, Double.NaN)?.takeIf { !it.isNaN() }?.let {
-                visMap[epoch] = WeatherMath.metersToMiles(it)
+                visMap[epoch] = if (metric) it / 1000.0 else WeatherMath.metersToMiles(it)
             }
             pres?.optDouble(i, Double.NaN)?.takeIf { !it.isNaN() }?.let {
                 presMap[epoch] = it

@@ -52,6 +52,7 @@ import com.crome.forecastpoint.data.WeatherHazard
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.ui.components.NwsIcon
 import com.crome.forecastpoint.ui.theme.Amber
+import com.crome.forecastpoint.util.Units
 import com.crome.forecastpoint.ui.theme.HighTemp
 import com.crome.forecastpoint.ui.theme.LowTemp
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
@@ -70,6 +71,7 @@ fun ForecastScreen(
     isFavorite: Boolean,
     expandCurrentConditions: Boolean = false,
     expandAdvisories: Boolean = true,
+    metricUnits: Boolean = false,
     onToggleFavorite: () -> Unit,
     onOpenHourly: () -> Unit,
     onDayClick: (DayForecast) -> Unit,
@@ -99,6 +101,7 @@ fun ForecastScreen(
                         LocationHeader(
                             snapshot = snapshot,
                             isFavorite = isFavorite,
+                            metricUnits = metricUnits,
                             onToggleFavorite = onToggleFavorite,
                         )
                     }
@@ -108,6 +111,7 @@ fun ForecastScreen(
                             snapshot = snapshot,
                             expandByDefault = expandCurrentConditions,
                             expandAdvisories = expandAdvisories,
+                            metricUnits = metricUnits,
                         )
                     }
                     if (error != null) {
@@ -125,7 +129,12 @@ fun ForecastScreen(
                         key = { index, day -> "${index}|${day.dateLabel}|${day.dayName}" },
                         contentType = { _, _ -> "day" },
                     ) { _, day ->
-                        DayCard(day = day, onClick = { onDayClick(day); onOpenHourly() })
+                        DayCard(
+                            day = day,
+                            storedMetric = snapshot.units.isMetric,
+                            metricUnits = metricUnits,
+                            onClick = { onDayClick(day); onOpenHourly() },
+                        )
                     }
                     item(key = "bottom_pad") { Spacer(Modifier.height(24.dp)) }
                 } else {
@@ -168,6 +177,7 @@ fun ForecastScreen(
 private fun LocationHeader(
     snapshot: WeatherSnapshot,
     isFavorite: Boolean,
+    metricUnits: Boolean,
     onToggleFavorite: () -> Unit,
 ) {
     Row(
@@ -178,7 +188,7 @@ private fun LocationHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            val elev = snapshot.elevationFt?.let { " - $it ft" }.orEmpty()
+            val elev = Units.elevationSuffix(snapshot.elevationFt, metricUnits)
             Text(
                 text = "${snapshot.locationName}$elev",
                 color = Color.White,
@@ -211,8 +221,10 @@ private fun CurrentConditionsCard(
     snapshot: WeatherSnapshot,
     expandByDefault: Boolean = false,
     expandAdvisories: Boolean = true,
+    metricUnits: Boolean = false,
 ) {
     val hazards = snapshot.hazards
+    val storedMetric = snapshot.units.isMetric
     // Expand when: user always wants conditions open, or advisories present and that setting is on
     val initialExpanded = expandByDefault || (hazards.isNotEmpty() && expandAdvisories)
     var expanded by remember(hazards.size, expandByDefault, expandAdvisories) {
@@ -260,7 +272,7 @@ private fun CurrentConditionsCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = current.temperatureF?.let { "$it° F" } ?: "—",
+                        text = Units.temperature(current.temperatureF, storedMetric, metricUnits),
                         color = Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
@@ -276,19 +288,29 @@ private fun CurrentConditionsCard(
 
             AnimatedVisibility(visible = expanded) {
                 Column(Modifier.padding(top = 12.dp)) {
-                    DetailLine("Feels Like", current.feelsLikeF?.let { "$it° F" })
+                    DetailLine(
+                        "Feels Like",
+                        current.feelsLikeF?.let {
+                            Units.temperature(it, storedMetric, metricUnits)
+                        },
+                    )
                     DetailLine("Relative Humidity", current.humidityPct?.let { "$it%" })
                     DetailLine("Wind Direction", current.windDirection)
-                    DetailLine("Wind Speed", current.windSpeedMph?.let { "$it mph" })
-                    DetailLine("Dew Point", current.dewPointF?.let { "$it° F" })
-                    DetailLine("Visibility", current.visibilityMi?.let { "$it mi" })
-                    val baro = buildString {
-                        current.barometerInHg?.let { append("$it in Hg") }
-                        current.barometerMb?.let {
-                            if (isNotEmpty()) append(" ($it mb)") else append("$it mb")
-                        }
-                    }.ifBlank { null }
-                    DetailLine("Barometer", baro)
+                    DetailLine("Wind Speed", Units.wind(current.windSpeedMph, storedMetric, metricUnits))
+                    DetailLine(
+                        "Dew Point",
+                        current.dewPointF?.let {
+                            Units.temperature(it, storedMetric, metricUnits)
+                        },
+                    )
+                    DetailLine(
+                        "Visibility",
+                        Units.visibility(current.visibilityMi, storedMetric, metricUnits),
+                    )
+                    DetailLine(
+                        "Barometer",
+                        Units.barometer(current.barometerInHg, current.barometerMb, metricUnits),
+                    )
 
                     if (hazards.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
@@ -433,7 +455,12 @@ private fun DetailLine(label: String, value: String?) {
 }
 
 @Composable
-private fun DayCard(day: DayForecast, onClick: () -> Unit) {
+private fun DayCard(
+    day: DayForecast,
+    storedMetric: Boolean,
+    metricUnits: Boolean,
+    onClick: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -455,11 +482,21 @@ private fun DayCard(day: DayForecast, onClick: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         day.highF?.let {
-                            Text("↑ $it° F", color = HighTemp, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "↑ ${Units.temperature(it, storedMetric, metricUnits)}",
+                                color = HighTemp,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
                             Spacer(Modifier.width(10.dp))
                         }
                         day.lowF?.let {
-                            Text("↓ $it° F", color = LowTemp, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "↓ ${Units.temperature(it, storedMetric, metricUnits)}",
+                                color = LowTemp,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
                         }
                     }
                     day.popPct?.let {

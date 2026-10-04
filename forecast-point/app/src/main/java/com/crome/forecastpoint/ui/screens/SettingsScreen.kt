@@ -60,6 +60,7 @@ import com.crome.forecastpoint.data.HourlyTabConfigItem
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.SurfaceDark
+import com.crome.forecastpoint.util.Units
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +79,7 @@ fun SettingsScreen(
     drawerNavConfig: List<DrawerNavConfigItem>,
     mapFocusRadiusMiles: Int,
     hazardHistoryDays: Int,
+    metricUnits: Boolean,
     spaceWeatherWatchThreshold: Int,
     spaceWeatherActiveThreshold: Int,
     spaceWeatherForecastHorizonHours: Int,
@@ -94,6 +96,7 @@ fun SettingsScreen(
     onDrawerNavConfigChange: (List<DrawerNavConfigItem>) -> Unit,
     onMapFocusRadiusMilesChange: (Int) -> Unit,
     onHazardHistoryDaysChange: (Int) -> Unit,
+    onMetricUnitsChange: (Boolean) -> Unit,
     onSpaceWeatherWatchThresholdChange: (Int) -> Unit,
     onSpaceWeatherActiveThresholdChange: (Int) -> Unit,
     onSpaceWeatherForecastHorizonHoursChange: (Int) -> Unit,
@@ -106,6 +109,24 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
+        // ── Units ──────────────────────────────────────────────────
+        SettingsCategory("Units") {
+            SettingsSwitchRow(
+                title = "Metric units",
+                description = if (metricUnits) {
+                    "°C, km/h, mm, km, and hPa. Forecast text reloads from NWS in metric. " +
+                        "Earthquake, severe-weather, and map-focus distances use kilometers. " +
+                        "Tropical wind stays in knots."
+                } else {
+                    "°F, mph, inches, and miles (US customary). Forecast text reloads from NWS. " +
+                        "Earthquake, severe-weather, and map-focus distances use miles. " +
+                        "Tropical wind stays in knots."
+                },
+                checked = metricUnits,
+                onCheckedChange = onMetricUnitsChange,
+            )
+        }
+
         // ── Title bar ──────────────────────────────────────────────
         SettingsCategory("Title bar") {
             SettingsSwitchRow(
@@ -185,17 +206,18 @@ fun SettingsScreen(
             )
             Text(
                 "Default distance for earthquake and severe weather maps, history lists, " +
-                    "and nearby storms (50–4000 miles). Hazard screens can temporarily explore " +
-                    "a different radius without changing this setting. Default: 250 miles.",
+                    "and nearby storms (${focusRadiusRange(metricUnits)}). Hazard screens can " +
+                    "temporarily explore a different radius without changing this setting. " +
+                    "Default: ${focusRadiusDefault(metricUnits)}.",
                 color = OnSurfaceMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             SettingsDropdown(
                 label = "Map focus radius",
-                valueLabel = mapFocusRadiusLabel(mapFocusRadiusMiles),
+                valueLabel = mapFocusRadiusLabel(mapFocusRadiusMiles, metricUnits),
                 options = PreferencesRepository.MAP_FOCUS_RADIUS_OPTIONS.map {
-                    it to mapFocusRadiusLabel(it)
+                    it to mapFocusRadiusLabel(it, metricUnits)
                 },
                 onSelect = onMapFocusRadiusMilesChange,
             )
@@ -932,12 +954,26 @@ private fun horizonLabel(hours: Int): String = when (hours) {
     else -> "$hours hours"
 }
 
-private fun mapFocusRadiusLabel(miles: Int): String =
-    if (miles == PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES) {
-        "$miles miles (default)"
-    } else {
-        "$miles miles"
-    }
+private fun mapFocusRadiusLabel(miles: Int, metricUnits: Boolean): String =
+    Units.hazardRadiusSettingsLabel(
+        miles,
+        metricUnits,
+        miles == PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
+    )
+
+private fun focusRadiusRange(metricUnits: Boolean): String {
+    val min = Units.hazardDistanceAmount(50.0, metricUnits)
+    val max = Units.hazardDistanceAmount(4000.0, metricUnits)
+    val unit = if (metricUnits) "km" else "miles"
+    return "$min–$max $unit"
+}
+
+private fun focusRadiusDefault(metricUnits: Boolean): String =
+    Units.hazardRadiusSettingsLabel(
+        PreferencesRepository.DEFAULT_MAP_FOCUS_RADIUS_MILES,
+        metricUnits,
+        isDefault = false,
+    )
 
 private fun hazardHistoryDaysLabel(days: Int): String {
     val base = PreferencesRepository.historyDaysLabel(days)
