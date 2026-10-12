@@ -128,7 +128,7 @@ fun AboutScreen() {
         Text(
             "Data & libraries\n" +
                 "• Forecasts & alerts: National Weather Service (weather.gov / api.weather.gov)\n" +
-                "• Tides / water levels: NOAA CO-OPS (coastal tides, Great Lakes) + USGS NWIS stage (rivers & inland lakes)\n" +
+                "• Tides / water levels: NOAA CO-OPS (coastal tides, Great Lakes) + USGS Water Data stage (rivers & inland lakes)\n" +
                 "• Earthquakes: USGS Earthquake Hazards Program (FDSN)\n" +
                 "• Severe weather: NHC active storms, SPC tornado reports, NWS alerts\n" +
                 "• Space weather: NOAA SWPC\n" +

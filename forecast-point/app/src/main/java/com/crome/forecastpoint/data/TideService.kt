@@ -7,7 +7,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
-import java.time.OffsetDateTime
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -23,7 +22,7 @@ import kotlin.math.sqrt
  *
  * 1. **NOAA CO-OPS tide predictions** (coastal / estuarine) — MLLW feet, harmonic forecast
  * 2. **NOAA CO-OPS water levels** (Great Lakes & some coastal) — LWD via OFS forecast
- * 3. **USGS NWIS gage height** (rivers, lakes, inland) — feet, observed stage + rise/fall
+ * 3. **USGS Water Data gage height** (rivers, lakes, inland) — feet, observed stage + rise/fall
  *
  * Station choice prefers (1) then (2) then (3) when each is within its max radius.
  */
@@ -110,10 +109,10 @@ class TideService(
         // 3) USGS river / lake stage (covers most interior US cities)
         val usgs = findNearestUsgsGage(latitude, longitude, MAX_USGS_MILES)
         if (usgs != null) {
-            val heights = fetchUsgsGageHeights(usgs.id)
+            val heights = fetchUsgsGageHeights(usgs.seriesId)
             return TideResult(
-                station = usgs,
-                distanceMiles = haversineMiles(latitude, longitude, usgs.lat, usgs.lon),
+                station = usgs.station,
+                distanceMiles = haversineMiles(latitude, longitude, usgs.station.lat, usgs.station.lon),
                 heightByEpochHour = heights,
                 unavailableReason = if (heights.isEmpty()) "No USGS stage data" else null,
                 datumLabel = "gage",
@@ -306,98 +305,76 @@ class TideService(
         return parseCoopsTimeValueSeries(httpGet(obsUrl), arrayKey = "data")
     }
 
+    private data class UsgsGagePick(
+        val station: TideStation,
+        val seriesId: String,
+    )
+
     /**
-     * Nearest active USGS site with instantaneous gage height (00065) within [maxMiles].
-     * Expands a lat/lon bounding box until a site is found or the radius is exhausted.
+     * Nearest USGS instantaneous gage height (parameter 00065) within [maxMiles].
+     * One search covers the whole radius. A series observed in the last 7 days
+     * wins over a closer series whose latest reading is older than that.
      */
-    private fun findNearestUsgsGage(latitude: Double, longitude: Double, maxMiles: Double): TideStation? {
-        // ~69 mi per degree latitude; expand in steps
-        val stepsMiles = listOf(15.0, 30.0, 50.0, maxMiles).distinct().filter { it <= maxMiles + 0.1 }
-        var best: TideStation? = null
-        var bestDist = Double.MAX_VALUE
-        for (radius in stepsMiles) {
-            val degLat = radius / 69.0
-            val degLon = radius / (69.0 * cos(Math.toRadians(latitude)).coerceAtLeast(0.2))
-            val bbox =
-                "${longitude - degLon},${latitude - degLat},${longitude + degLon},${latitude + degLat}"
-            val url =
-                "https://waterservices.usgs.gov/nwis/site/?format=rdb" +
-                    "&bBox=$bbox" +
-                    "&siteType=ST,LK,ES,OC" +
-                    "&siteStatus=active" +
-                    "&hasDataTypeCd=iv" +
-                    "&parameterCd=00065"
-            val body = httpGet(url) ?: continue
-            for (site in parseUsgsSiteRdb(body)) {
-                val d = haversineMiles(latitude, longitude, site.lat, site.lon)
-                if (d <= maxMiles && d < bestDist) {
-                    bestDist = d
-                    best = site
-                }
-            }
-            if (best != null && bestDist <= radius) break
-        }
-        return best
+    private fun findNearestUsgsGage(latitude: Double, longitude: Double, maxMiles: Double): UsgsGagePick? {
+        val candidates = readUsgsPages(
+            UsgsWaterData.latestContinuousUrl(latitude, longitude, maxMiles),
+            UsgsWaterData.SEARCH_MAX_PAGES,
+            UsgsWaterData::parseLatestPage,
+        )
+        val best = UsgsWaterData.pick(
+            candidates,
+            latitude,
+            longitude,
+            maxMiles,
+            java.time.Instant.now().epochSecond,
+        ) ?: return null
+        val named = httpGet(UsgsWaterData.monitoringLocationUrl(best.locationId))
+            ?.let { UsgsWaterData.parseMonitoringLocation(it) }
+        val siteNo = named?.siteNo?.takeIf { it.isNotBlank() }
+            ?: UsgsWaterData.siteNumber(best.locationId)
+        if (siteNo.isBlank()) return null
+        val name = named?.name?.takeIf { it.isNotBlank() } ?: "USGS $siteNo"
+        return UsgsGagePick(
+            station = TideStation(
+                id = siteNo,
+                name = name,
+                lat = best.lat,
+                lon = best.lon,
+                kind = StationKind.UsgsGage,
+            ),
+            seriesId = best.seriesId,
+        )
     }
 
-    private fun parseUsgsSiteRdb(body: String): List<TideStation> {
-        val out = ArrayList<TideStation>()
-        for (line in body.lineSequence()) {
-            if (line.isBlank() || line.startsWith("#")) continue
-            if (line.startsWith("agency_cd") || line.startsWith("5s") || line.startsWith("15s")) continue
-            val p = line.split('\t')
-            if (p.size < 6) continue
-            val id = p[1].trim()
-            val name = p[2].trim()
-            val lat = p[4].toDoubleOrNull() ?: continue
-            val lon = p[5].toDoubleOrNull() ?: continue
-            if (id.isBlank()) continue
-            out += TideStation(
-                id = id,
-                name = name,
-                lat = lat,
-                lon = lon,
-                kind = StationKind.UsgsGage,
-            )
+    /** Instantaneous gage height (ft) for the last 7 days, bucketed by UTC hour. */
+    private fun fetchUsgsGageHeights(seriesId: String): Map<Long, Double> {
+        if (seriesId.isBlank()) return emptyMap()
+        val samples = readUsgsPages(
+            UsgsWaterData.continuousUrl(seriesId),
+            UsgsWaterData.HISTORY_MAX_PAGES,
+            UsgsWaterData::parseContinuousPage,
+        )
+        return UsgsWaterData.bucketHours(samples)
+    }
+
+    private fun <T> readUsgsPages(
+        firstUrl: String,
+        maxPages: Int,
+        parse: (String) -> UsgsWaterData.Page<T>,
+    ): List<T> {
+        val out = ArrayList<T>()
+        var url: String? = firstUrl
+        val seen = HashSet<String>()
+        var pages = 0
+        while (url != null && pages < maxPages) {
+            if (!UsgsWaterData.isWaterDataUrl(url) || !seen.add(url)) break
+            val body = httpGet(url) ?: break
+            val page = parse(body)
+            out.addAll(page.items)
+            url = page.nextUrl
+            pages++
         }
         return out
-    }
-
-    /** Instantaneous gage height (ft) for the last ~7 days, bucketed by UTC hour. */
-    private fun fetchUsgsGageHeights(siteNo: String): Map<Long, Double> {
-        val url =
-            "https://waterservices.usgs.gov/nwis/iv/?format=json" +
-                "&sites=$siteNo" +
-                "&parameterCd=00065" +
-                "&period=P7D"
-        val body = httpGet(url) ?: return emptyMap()
-        return try {
-            val root = JSONObject(body)
-            val series = root.optJSONObject("value")
-                ?.optJSONArray("timeSeries")
-                ?: return emptyMap()
-            if (series.length() == 0) return emptyMap()
-            val values = series.optJSONObject(0)
-                ?.optJSONArray("values")
-                ?.optJSONObject(0)
-                ?.optJSONArray("value")
-                ?: return emptyMap()
-            val out = HashMap<Long, Double>(values.length() / 2 + 4)
-            for (i in 0 until values.length()) {
-                val o = values.optJSONObject(i) ?: continue
-                val v = o.optString("value").toDoubleOrNull() ?: continue
-                val t = o.optString("dateTime")
-                if (t.isBlank()) continue
-                val epochSec = runCatching {
-                    OffsetDateTime.parse(t).toEpochSecond()
-                }.getOrNull() ?: continue
-                val hour = (epochSec / 3600L) * 3600L
-                out[hour] = v
-            }
-            out
-        } catch (_: Exception) {
-            emptyMap()
-        }
     }
 
     private fun parseCoopsTimeValueSeries(body: String?, arrayKey: String): Map<Long, Double> {

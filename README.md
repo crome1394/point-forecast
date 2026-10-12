@@ -112,7 +112,7 @@ Signed / F-Droid releases: see [RELEASE.md](RELEASE.md) and [docs/REPRODUCIBLE_B
 | Data | Source |
 |------|--------|
 | Forecast, observations, alerts | NWS (`weather.gov`, `api.weather.gov`) |
-| Tides / water levels | NOAA CO-OPS; USGS NWIS stage |
+| Tides / water levels | NOAA CO-OPS; USGS Water Data stage (`api.waterdata.usgs.gov`) |
 | Space weather (Kp / G/R/S) | NOAA SWPC |
 | Earthquakes | USGS Earthquake Hazards Program (FDSN) |
 | Severe weather | SPC reports + WCM; NHC CurrentStorms; NWS CAP |

@@ -23,7 +23,7 @@
         <domain includeSubdomains="true">services.swpc.noaa.gov</domain>
         <!-- USGS -->
         <domain includeSubdomains="true">earthquake.usgs.gov</domain>
-        <domain includeSubdomains="true">waterservices.usgs.gov</domain>
+        <domain includeSubdomains="true">api.waterdata.usgs.gov</domain>
         <!-- Maps / geocoding (no Google Play Services) -->
         <domain includeSubdomains="true">openstreetmap.org</domain>
         <domain includeSubdomains="true">tile.openstreetmap.org</domain>

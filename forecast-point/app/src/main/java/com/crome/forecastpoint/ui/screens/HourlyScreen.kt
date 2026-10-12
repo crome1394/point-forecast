@@ -30,11 +30,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crome.forecastpoint.data.HourlyRow
@@ -92,6 +97,8 @@ private val HeaderStyle = TextStyle(
     fontSize = 11.sp,
     color = Color(0xFFB0BEC5),
     textAlign = TextAlign.Center,
+    lineHeight = 13.sp,
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
 )
 private val TimeCellStyle = TextStyle(
     fontFamily = TableFont,
@@ -100,6 +107,7 @@ private val TimeCellStyle = TextStyle(
     color = Color(0xFF212121),
     textAlign = TextAlign.Center,
     lineHeight = 13.sp,
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
 )
 private val TimeColumnBg = Color(0xFFECEFF1)
 private val TimeColumnBgAlt = Color(0xFFDEE2E5)
@@ -692,17 +700,30 @@ private fun HourlyTable(
     headers: List<String>,
     rows: List<HourlyTableRow>,
 ) {
+    // Heights are dp and do not follow the system font scale. The time label
+    // is two lines, so a fixed row keeps the date and clips the hour.
+    val density = LocalDensity.current
+    val rowHeight = with(density) {
+        maxOf(RowHeight, (TimeCellStyle.lineHeight * 2).toDp() + 8.dp)
+    }
+    val headerHeight = with(density) {
+        // Extra slack above 1.0: a two-line header that is even 1px short
+        // ellipsizes to one line ("Temper…") instead of wrapping.
+        val slack = if (density.fontScale > 1.05f) 16.dp else 6.dp
+        maxOf(HeaderHeight, (HeaderStyle.lineHeight * 2).toDp() + slack)
+    }
+    val timeColWidth = rememberTimeColumnWidth(rows)
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .background(HeaderBg)
-                .height(HeaderHeight),
+                .height(headerHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .width(TimeColWidth)
+                    .width(timeColWidth)
                     .fillMaxHeight()
                     .background(HeaderBg)
                     .border(width = 0.5.dp, color = Color(0xFF37474F)),
@@ -732,23 +753,34 @@ private fun HourlyTable(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .height(RowHeight)
+                        .height(rowHeight)
                         .background(dataBg),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         Modifier
-                            .width(TimeColWidth)
+                            .width(timeColWidth)
                             .fillMaxHeight()
                             .background(timeBg)
                             .border(width = 0.5.dp, color = Color(0xFFCFD8DC)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = row.time,
-                            style = TimeCellStyle,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.padding(horizontal = 2.dp),
-                        )
+                        ) {
+                            // One Text per line so a wide font cannot wrap the
+                            // date onto the hour's line and push it out of the row.
+                            row.time.split('\n').forEach { line ->
+                                Text(
+                                    text = line,
+                                    style = TimeCellStyle,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                     row.cells.forEach { cell ->
                         Text(
@@ -768,6 +800,32 @@ private fun HourlyTable(
                 }
             }
         }
+    }
+}
+
+/**
+ * Width of the date/hour column. At the default font this stays [TimeColWidth].
+ * A larger system font, or a wider user font, widens it so "Wed 10/11" stays
+ * on one line. Capped so the data columns keep most of the screen.
+ */
+@Composable
+private fun rememberTimeColumnWidth(rows: List<HourlyTableRow>): Dp {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val labels = rows.map { it.time.substringBefore('\n') }
+    return remember(labels, density.density, density.fontScale, screenWidthDp) {
+        val widestPx = labels.maxOfOrNull { label ->
+            measurer.measure(
+                text = label.ifBlank { " " },
+                style = TimeCellStyle,
+                maxLines = 1,
+                softWrap = false,
+            ).size.width
+        } ?: 0
+        val measured = with(density) { widestPx.toDp() + 8.dp }
+        val cap = (screenWidthDp * 0.42f).dp
+        measured.coerceIn(TimeColWidth, maxOf(TimeColWidth, cap))
     }
 }
 

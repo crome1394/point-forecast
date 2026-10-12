@@ -1,0 +1,2 @@
+• Hourly table keeps the date and the hour visible when the system font is larger than the default
+• River and lake stage now comes from the USGS Water Data API

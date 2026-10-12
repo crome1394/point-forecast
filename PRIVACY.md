@@ -1,6 +1,6 @@
 # Privacy policy — Point Forecast
 
-**Last updated:** 2026-08-15
+**Last updated:** 2026-10-11
 
 Point Forecast is free and open-source software. It is designed for **local-first** weather display with **no accounts** and **no analytics**.
 
@@ -34,7 +34,7 @@ When you use the app (or enable auto-refresh), it contacts **public data service
 | Tides / water levels | `api.tidesandcurrents.noaa.gov` |
 | Space weather | `services.swpc.noaa.gov` |
 | Earthquakes | `earthquake.usgs.gov` |
-| River/lake stage | `waterservices.usgs.gov` |
+| River/lake stage | `api.waterdata.usgs.gov` |
 | Tropical storms | `www.nhc.noaa.gov` |
 | Tornado reports | `www.spc.noaa.gov` |
 | Optional hourly extras | `api.open-meteo.com`, `air-quality-api.open-meteo.com` |

@@ -7,6 +7,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.12] — 2026-10-11
+
+### Changed
+
+- River and lake stage now comes from the USGS Water Data API (`api.waterdata.usgs.gov`). The previous WaterServices host is being retired
+
+### Fixed
+
+- Hourly table keeps the hour visible when the system font or display font is larger than the default
+
 ## [1.1.11] — 2026-10-03
 
 ### Added
