@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Severe Weather no longer drops a whole day of tornado reports when one report time is 04:04 or 14:04 (the CSV was mistaken for a 404 error page)
+
 ## [1.1.12] — 2026-10-11
 
 ### Changed
