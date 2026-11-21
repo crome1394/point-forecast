@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import android.content.Context
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -514,7 +515,7 @@ class TideService(
     private fun httpGet(url: String): String? {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)")
+            .header("User-Agent", HttpUserAgent.VALUE)
             .header("Accept", "application/json, text/plain, */*")
             .get()
             .build()

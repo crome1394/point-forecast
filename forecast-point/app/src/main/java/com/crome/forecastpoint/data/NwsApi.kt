@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import com.crome.forecastpoint.util.IconMapper
 import com.crome.forecastpoint.util.LocationTimeZone
 import com.crome.forecastpoint.util.SunCalculator
@@ -1207,8 +1208,7 @@ class NwsApi(
     }
 
     companion object {
-        const val USER_AGENT =
-            "PointForecast/1.1.11 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        const val USER_AGENT = HttpUserAgent.VALUE
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

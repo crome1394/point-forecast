@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -761,8 +762,7 @@ class SevereWeatherService(
 
         internal fun isSpcReportCsv(body: String?): Boolean =
             body != null && body.trimStart().startsWith("Time,", ignoreCase = true)
-        private const val USER_AGENT =
-            "PointForecast/1.1.7 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        private const val USER_AGENT = HttpUserAgent.VALUE
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()
