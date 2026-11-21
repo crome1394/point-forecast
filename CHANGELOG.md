@@ -10,6 +10,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Severe Weather no longer drops a whole day of tornado reports when one report time is 04:04 or 14:04 (the CSV was mistaken for a 404 error page)
+- Current Conditions shows the observation station's full name (e.g. "John Glenn Columbus International Airport") instead of only its ID ("KCMH")
 
 ## [1.1.12] — 2026-10-11
 

@@ -600,7 +600,9 @@ class NwsApi(
         val slpMb = slp?.toDoubleOrNull()?.let {
             String.format(Locale.US, "%.2f", WeatherMath.inHgToMb(it))
         }
-        val station = currentObj.optString("Name").takeIf { it.isNotBlank() }
+        // MapClick uses lowercase "name" (e.g. "John Glenn Columbus International Airport").
+        val station = currentObj.optString("name").takeIf { it.isNotBlank() }
+            ?: currentObj.optString("Name").takeIf { it.isNotBlank() }
             ?: currentObj.optString("id").takeIf { it.isNotBlank() }
             ?: area
         val obsDate = currentObj.optString("Date").takeIf { it.isNotBlank() }
