@@ -53,10 +53,22 @@ class NwsApi(
         coroutineScope {
             // Critical path first: forecast JSON (drives main screen).
             // unit=0 US customary, unit=1 metric (period temps + forecast text).
+            // MapClick is undocumented; on failure we rebuild it from api.weather.gov.
             val forecastDeferred = async {
-                getJson(
-                    "https://forecast.weather.gov/MapClick.php?lat=$lat&lon=$lon&unit=$mapUnit&lg=english&FcstType=json",
-                )
+                runCatching {
+                    getJson(
+                        "https://forecast.weather.gov/MapClick.php?lat=$lat&lon=$lon&unit=$mapUnit&lg=english&FcstType=json",
+                    )
+                }
+            }
+            // Shared by the grid series and the api.weather.gov fallback.
+            val pointsDeferred = async {
+                runCatching {
+                    getJson(
+                        "https://api.weather.gov/points/" +
+                            String.format(Locale.US, "%.4f,%.4f", latitude, longitude),
+                    )
+                }.getOrNull()
             }
             val digitalDeferred = async {
                 runCatching {
@@ -67,7 +79,9 @@ class NwsApi(
             }
             // Secondary data in parallel (failures are non-fatal)
             val gridDeferred = async {
-                runCatching { fetchGridSeries(latitude, longitude, metric) }.getOrDefault(GridSeries.EMPTY)
+                runCatching {
+                    pointsDeferred.await()?.let { fetchGridSeries(it, metric) } ?: GridSeries.EMPTY
+                }.getOrDefault(GridSeries.EMPTY)
             }
             // null = request failed; empty list = no active alerts (authoritative)
             val alertsDeferred = async {
@@ -99,9 +113,28 @@ class NwsApi(
                 }
             }
 
+            val mapClickDigital = digitalDeferred.await()
+            val fallbackDigitalDeferred = async {
+                if (mapClickDigital != null) {
+                    null
+                } else {
+                    runCatching {
+                        pointsDeferred.await()?.let { fetchFallbackDigital(it, metric) }
+                    }.getOrNull()
+                }
+            }
+            val root = forecastDeferred.await().getOrElse { mapClickError ->
+                val points = pointsDeferred.await() ?: throw mapClickError
+                runCatching { fetchFallbackRoot(points, metric) }
+                    .getOrElse { throw mapClickError }
+            }
+
             parseSnapshot(
-                root = forecastDeferred.await(),
-                digital = digitalDeferred.await(),
+                root = root,
+                digital = mapClickDigital ?: fallbackDigitalDeferred.await(),
+                // MapClick digital timestamps are unreliable and get re-anchored;
+                // api.weather.gov hourly timestamps are correct as given.
+                anchorHourlyToPeriods = mapClickDigital != null,
                 grid = gridDeferred.await(),
                 apiAlerts = alertsDeferred.await(),
                 tides = tidesDeferred.await(),
@@ -357,11 +390,38 @@ class NwsApi(
         }
     }
 
-    private fun fetchGridSeries(latitude: Double, longitude: Double, metric: Boolean): GridSeries {
-        val points = getJson(
-            "https://api.weather.gov/points/" +
-                String.format(Locale.US, "%.4f,%.4f", latitude, longitude),
-        )
+    /**
+     * Rebuild the MapClick `FcstType=json` document from api.weather.gov:
+     * /forecast (in the requested units) plus the nearest station's latest
+     * observation. The observation is optional.
+     */
+    private fun fetchFallbackRoot(points: JSONObject, metric: Boolean): JSONObject {
+        val props = points.optJSONObject("properties")
+            ?: throw IllegalStateException("No properties in /points")
+        val forecastUrl = props.optString("forecast").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("No forecast URL in /points")
+        val forecast = getJson(if (metric) "$forecastUrl?units=si" else forecastUrl)
+        val observation = runCatching {
+            val stationsUrl = props.optString("observationStations").takeIf { it.isNotBlank() }
+                ?: return@runCatching null
+            val stationId = getJson("$stationsUrl?limit=1")
+                .optJSONArray("features")?.optJSONObject(0)
+                ?.optJSONObject("properties")?.optString("stationIdentifier")
+                ?.takeIf { it.isNotBlank() }
+                ?: return@runCatching null
+            getJson("https://api.weather.gov/stations/$stationId/observations/latest")
+        }.getOrNull()
+        return NwsApiFallback.mapClickRoot(points, forecast, observation)
+    }
+
+    /** Rebuild MapClick `FcstType=digitalJSON` from api.weather.gov /forecast/hourly. */
+    private fun fetchFallbackDigital(points: JSONObject, metric: Boolean): JSONObject? {
+        val url = points.optJSONObject("properties")?.optString("forecastHourly")
+            ?.takeIf { it.isNotBlank() } ?: return null
+        return NwsApiFallback.digitalFromHourly(getJson(url), metric)
+    }
+
+    private fun fetchGridSeries(points: JSONObject, metric: Boolean): GridSeries {
         val gridUrl = points.optJSONObject("properties")?.optString("forecastGridData")
             ?.takeIf { it.isNotBlank() }
             ?: return GridSeries.EMPTY
@@ -558,6 +618,7 @@ class NwsApi(
     private fun parseSnapshot(
         root: JSONObject,
         digital: JSONObject?,
+        anchorHourlyToPeriods: Boolean,
         grid: GridSeries,
         apiAlerts: List<WeatherHazard>?,
         tides: TideService.TideResult,
@@ -673,6 +734,7 @@ class NwsApi(
         // Anchor hourly timeline to MapClick period starts — digitalJSON time/unixtime
         // labels are often wrong (e.g. "6 pm" + bad unix for data that is actually 10 pm).
         val hourlyAnchorEpochSec = periods.firstOrNull()?.startTimeIso
+            ?.takeIf { anchorHourlyToPeriods }
             ?.let { parseIso(it)?.time }
             ?.let { it / 1000L }
         val hourly = mergeHourlyExtras(

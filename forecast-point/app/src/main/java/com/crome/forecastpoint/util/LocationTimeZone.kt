@@ -31,6 +31,10 @@ object LocationTimeZone {
     /** Map NWS `location.timezone` codes to IANA zones (handles DST). */
     fun fromNwsCode(code: String?): TimeZone? {
         if (code.isNullOrBlank()) return null
+        // api.weather.gov fallback passes an IANA id such as "America/New_York".
+        if (code.contains('/')) {
+            return TimeZone.getTimeZone(code).takeIf { it.id == code }
+        }
         val letter = code.trim().substringBefore('|').uppercase(Locale.US)
         val id = when (letter) {
             "E", "V" -> "America/New_York" // Eastern; V sometimes used in NE

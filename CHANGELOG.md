@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- If forecast.weather.gov (MapClick) fails, the forecast, hourly table, and current conditions now load from the documented api.weather.gov API instead of the refresh failing
+
 ### Fixed
 
 - Severe Weather no longer drops a whole day of tornado reports when one report time is 04:04 or 14:04 (the CSV was mistaken for a 404 error page)

@@ -14,6 +14,7 @@ All source is under `forecast-point/app/src/main/java/com/crome/forecastpoint/`.
 | `ui/screens/` | One file per screen (Forecast, Hourly, Map, Search, Settings, Sun & Moon, Space Weather, Earthquakes, Severe Weather, About) |
 | `data/WeatherRepository.kt` | Single entry point for forecast refreshes. A mutex stops overlapping refreshes from the UI, widget, and worker |
 | `data/NwsApi.kt` | Builds the forecast snapshot from NWS and merges in tides and Open-Meteo extras. Also handles Nominatim geocoding |
+| `data/NwsApiFallback.kt` | Converts api.weather.gov forecast, hourly, and observation JSON into the MapClick shapes `NwsApi` parses |
 | `data/TideService.kt`, `data/UsgsWaterData.kt` | Water level: picks the nearest NOAA CO-OPS station or USGS stream gage |
 | `data/OpenMeteoService.kt` | Optional UV, visibility, pressure, and air quality |
 | `data/SpaceWeatherService.kt` | NOAA SWPC Kp forecast and R/S/G scales |
@@ -35,8 +36,10 @@ WeatherRepository.refresh()  ── mutex, 2-minute freshness check
         │
         ▼
 NwsApi.fetchWeather()  ── all requests run in parallel
-   ├─ MapClick FcstType=json         REQUIRED: periods, text, current obs, hazards
-   ├─ MapClick FcstType=digitalJSON  optional: hourly rows
+   ├─ MapClick FcstType=json         periods, text, current obs, hazards
+   │     └─ on failure: api.weather.gov /forecast + latest station observation
+   ├─ MapClick FcstType=digitalJSON  hourly rows
+   │     └─ on failure: api.weather.gov /forecast/hourly
    ├─ api.weather.gov points → gridpoints   optional: QPF, gusts, dew point, visibility
    ├─ api.weather.gov alerts/active  optional: CAP alerts (MapClick hazards if this fails)
    ├─ TideService                    optional: CO-OPS / USGS water level
@@ -46,11 +49,11 @@ NwsApi.fetchWeather()  ── all requests run in parallel
 WeatherSnapshot  →  DataStore  →  StateFlow  →  Compose UI and widget
 ```
 
-Only the MapClick forecast JSON is required. If any other source fails, the snapshot is built without that data. If MapClick fails, the whole refresh fails and the last cached snapshot stays on screen.
+MapClick is undocumented, so both MapClick requests have an api.weather.gov fallback. `NwsApiFallback` rebuilds the MapClick JSON from the documented API, and the rest of the parser does not know which source the data came from. A refresh fails only when MapClick and api.weather.gov both fail; the last cached snapshot then stays on screen. If any optional source fails, the snapshot is built without that data.
 
 ### Hourly timeline
 
-`digitalJSON` gives hourly arrays in the correct order, but its `time` and `unixtime` labels are often wrong. `parseHourly` ignores those labels and stamps the rows as a continuous series that starts at the first MapClick period's `startValidTime`. That series matches `api.weather.gov/.../forecast/hourly`. Grid values (QPF, gust, dew point, visibility) are expanded from ISO-8601 intervals into hourly buckets and joined on the epoch hour.
+`digitalJSON` gives hourly arrays in the correct order, but its `time` and `unixtime` labels are often wrong. `parseHourly` ignores those labels and stamps the rows as a continuous series that starts at the first MapClick period's `startValidTime`. That series matches `api.weather.gov/.../forecast/hourly`. Rows from the api.weather.gov fallback already have correct timestamps, so they are not re-stamped. Grid values (QPF, gust, dew point, visibility) are expanded from ISO-8601 intervals into hourly buckets and joined on the epoch hour.
 
 ### Units
 
@@ -64,8 +67,8 @@ MapClick `unit=1` returns forecast temperatures and text in metric. Current obse
 
 | Data | Endpoint | Used by | If it fails |
 |---|---|---|---|
-| Forecast, current obs | `forecast.weather.gov/MapClick.php?FcstType=json` | `NwsApi` | Refresh fails; cached data stays |
-| Hourly | `forecast.weather.gov/MapClick.php?FcstType=digitalJSON` | `NwsApi` | Hourly screen is empty |
+| Forecast, current obs | `forecast.weather.gov/MapClick.php?FcstType=json` | `NwsApi` | api.weather.gov `/forecast` + `/stations/{id}/observations/latest` |
+| Hourly | `forecast.weather.gov/MapClick.php?FcstType=digitalJSON` | `NwsApi` | api.weather.gov `/forecast/hourly` |
 | Grid series | `api.weather.gov/points`, `/gridpoints` | `NwsApi` | No QPF; gust and dew point fall back to digital or computed values |
 | Alerts | `api.weather.gov/alerts/active` | `NwsApi`, `SevereWeatherService` | MapClick hazard list |
 | Tides | `api.tidesandcurrents.noaa.gov` (datagetter, mdapi) | `TideService` | Tide tab shows the reason |
