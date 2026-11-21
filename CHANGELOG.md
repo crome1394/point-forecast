@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.13] — 2026-11-21
+
 ### Changed
 
 - If forecast.weather.gov (MapClick) fails, the forecast, hourly table, and current conditions now load from the documented api.weather.gov API instead of the refresh failing

@@ -1,0 +1,4 @@
+• Forecast keeps loading from api.weather.gov if forecast.weather.gov fails
+• Tornado report times and dates are correct (evening reports were a day early)
+• Tornadoes are no longer listed twice or dropped for a whole day
+• Current Conditions shows the station's full name
