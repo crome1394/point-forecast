@@ -308,12 +308,10 @@ class SevereWeatherService(
             var body: String? = null
             for (u in urls) {
                 body = httpGet(u)
-                if (!body.isNullOrBlank() &&
-                    !body.contains("404", ignoreCase = true) &&
-                    !body.trimStart().startsWith("<!")
-                ) {
-                    break
-                }
+                // httpGet already returns null on HTTP errors. Accept only a real
+                // SPC CSV (header row starts with "Time,"). Do not search the body
+                // for "404": report times such as 0404 / 1404 contain it.
+                if (isSpcReportCsv(body)) break
                 body = null
             }
             // "today.csv" style alternate for the end day
@@ -728,6 +726,13 @@ class SevereWeatherService(
         private const val UI_MAX_REPORTS = 120
         /** Practical max look-back (SPC WCM tornado archive: 1950–present; 20y is well covered). */
         const val MAX_HISTORY_DAYS = 7300 // 20 years
+
+        /**
+         * True when [body] is an SPC daily storm-report CSV (header-only files
+         * count: they mean "no reports that day"). Error pages are HTML.
+         */
+        internal fun isSpcReportCsv(body: String?): Boolean =
+            body != null && body.trimStart().startsWith("Time,", ignoreCase = true)
         private const val USER_AGENT =
             "PointForecast/1.1.7 (Android; open-source; https://github.com/crome1394/point-forecast)"
 
