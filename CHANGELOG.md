@@ -10,6 +10,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - If forecast.weather.gov (MapClick) fails, the forecast, hourly table, and current conditions now load from the documented api.weather.gov API instead of the refresh failing
+- Hourly cloud cover falls back to NWS grid sky cover when the hourly source has none, so the column stays filled when the api.weather.gov fallback is in use
 
 ### Fixed
 
