@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -260,8 +261,7 @@ class EarthquakeService(
     }
 
     companion object {
-        private const val USER_AGENT =
-            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        private const val USER_AGENT = HttpUserAgent.VALUE
         private const val KM_PER_MILE = 1.609344
         /** USGS allows large limits; keep reasonable for mobile. */
         private const val QUERY_LIMIT = 1500

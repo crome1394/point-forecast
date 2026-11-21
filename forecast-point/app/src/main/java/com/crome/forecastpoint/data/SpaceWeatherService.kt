@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -185,8 +186,7 @@ class SpaceWeatherService(
     }
 
     companion object {
-        private const val USER_AGENT =
-            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        private const val USER_AGENT = HttpUserAgent.VALUE
 
         /** Parse "G2", "R1", "S0" → 0–5 (unknown → 0). */
         fun scaleNumber(scale: String?): Int {

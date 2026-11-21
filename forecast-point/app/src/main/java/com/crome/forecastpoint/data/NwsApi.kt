@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import com.crome.forecastpoint.util.IconMapper
 import com.crome.forecastpoint.util.LocationTimeZone
 import com.crome.forecastpoint.util.SunCalculator
@@ -456,11 +457,19 @@ class NwsApi(
             transform = { m -> if (metric) m / 1000.0 else WeatherMath.metersToMiles(m) },
             splitAcrossHours = false,
         )
+        // Sky cover in percent; fills cloud cover when the hourly source has none
+        // (api.weather.gov /forecast/hourly in the fallback).
+        val skyByEpoch = expandGridSeries(
+            props.optJSONObject("skyCover")?.optJSONArray("values"),
+            transform = { pct -> pct },
+            splitAcrossHours = false,
+        )
         return GridSeries(
             qpfInches = qpfByEpoch,
             gustMph = gustByEpoch,
             dewPointF = dewByEpoch,
             visibilityMi = visByEpoch,
+            skyCoverPct = skyByEpoch,
         )
     }
 
@@ -990,7 +999,8 @@ class NwsApi(
                     dewPointF = dew,
                     popPct = pop,
                     precipIn = precipIn,
-                    cloudCoverPct = optInt(clouds, i),
+                    cloudCoverPct = optInt(clouds, i)
+                        ?: epochHour?.let { grid.skyCoverPct[it]?.roundToInt() },
                     humidityPct = rh,
                     windSpeedMph = wspd,
                     windGustMph = gust,
@@ -1190,6 +1200,7 @@ class NwsApi(
         val gustMph: Map<Long, Double>,
         val dewPointF: Map<Long, Double>,
         val visibilityMi: Map<Long, Double> = emptyMap(),
+        val skyCoverPct: Map<Long, Double> = emptyMap(),
     ) {
         companion object {
             val EMPTY = GridSeries(emptyMap(), emptyMap(), emptyMap(), emptyMap())
@@ -1197,8 +1208,7 @@ class NwsApi(
     }
 
     companion object {
-        const val USER_AGENT =
-            "PointForecast/1.1.11 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        const val USER_AGENT = HttpUserAgent.VALUE
 
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

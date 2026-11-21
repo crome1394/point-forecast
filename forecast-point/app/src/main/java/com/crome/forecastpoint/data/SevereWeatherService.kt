@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -251,20 +252,18 @@ class SevereWeatherService(
         val now = System.currentTimeMillis()
         val dayMs = 24L * 3600L * 1000L
         val dailyHorizonStart = now - DAILY_CSV_LOOKBACK_DAYS.toLong() * dayMs
-        val merged = LinkedHashMap<String, TornadoReport>()
-
         // Preliminary daily reports for the recent portion of the window
-        if (endMs >= dailyHorizonStart) {
+        val daily = if (endMs >= dailyHorizonStart) {
             val dailyFrom = maxOf(startMs, dailyHorizonStart)
             fetchDailyTornadoReports(refLat, refLon, maxMiles, dailyFrom, endMs)
-                .forEach { merged[it.id] = it }
+        } else {
+            emptyList()
         }
 
         // Official / multi-decade WCM (no-op for years with missing files)
-        fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
-            .forEach { merged.putIfAbsent(it.id, it) }
+        val wcm = fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
 
-        return selectTimeSpanningReports(merged.values.toList(), UI_MAX_REPORTS)
+        return selectTimeSpanningReports(mergeDailyAndWcm(daily, wcm), UI_MAX_REPORTS)
             .sortedByDescending { it.epochMs }
     }
 
@@ -286,12 +285,14 @@ class SevereWeatherService(
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
+        // The previous day's file holds the start day's 00:00–11:59 UTC reports.
         val startDay = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
             timeInMillis = startMs
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
+            add(Calendar.DAY_OF_YEAR, -1)
         }
         val spanDays = (
             ((endMs - startMs).coerceAtLeast(0L) / (24L * 3600L * 1000L)).toInt() + 3
@@ -557,6 +558,9 @@ class SevereWeatherService(
         ymdFmt: SimpleDateFormat,
         out: MutableList<TornadoReport>,
     ) {
+        val utcHhmm = SimpleDateFormat("HHmm", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
         for (line in body.lineSequence().drop(1)) {
             if (line.isBlank()) continue
             val p = parseCsvLine(line)
@@ -572,29 +576,21 @@ class SevereWeatherService(
             val lon = p.getOrNull(16)?.toDoubleOrNull() ?: continue
             val dist = haversineMiles(refLat, refLon, lat, lon)
             if (dist > maxMiles) continue
-            val day = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-                set(Calendar.YEAR, yr)
-                set(Calendar.MONTH, (mo - 1).coerceIn(0, 11))
-                set(Calendar.DAY_OF_MONTH, dy.coerceIn(1, 31))
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            // time is HH:MM:SS
+            // time is HH:MM:SS in the row's tz (3 = CST, 9 = GMT)
             val parts = timeStr.split(':')
-            if (parts.size >= 2) {
-                day.set(Calendar.HOUR_OF_DAY, parts[0].toIntOrNull()?.coerceIn(0, 23) ?: 0)
-                day.set(Calendar.MINUTE, parts[1].toIntOrNull()?.coerceIn(0, 59) ?: 0)
-            }
-            val epoch = day.timeInMillis
+            val epoch = wcmEpochMs(
+                yr, mo, dy,
+                hour = parts.getOrNull(0)?.toIntOrNull() ?: 0,
+                minute = parts.getOrNull(1)?.toIntOrNull() ?: 0,
+                tzCode = p.getOrNull(6)?.trim().orEmpty(),
+            )
             if (epoch < startMs || epoch > endMs) continue
             val fScale = when {
                 mag == null || mag < 0 -> "UNK"
                 else -> "EF$mag"
             }
-            val ymd = ymdFmt.format(day.time)
-            val hhmm = timeStr.take(5).replace(":", "")
+            // Daily report pages run 1200–1159 UTC; shift back 12 h to find the file date.
+            val ymd = ymdFmt.format(java.util.Date(epoch - 12L * 3600L * 1000L))
             // WCM rows have start lat/lon, not city names — show coordinates + state.
             val place = buildString {
                 append(String.format(Locale.US, "%.2f°N", lat))
@@ -607,7 +603,8 @@ class SevereWeatherService(
             val fips = p.getOrNull(24)?.trim().orEmpty() // f1 county FIPS (often present)
             out += TornadoReport(
                 id = "wcm_${yr}_${mo}_${dy}_${lat}_$lon",
-                timeLabel = if (hhmm.length >= 3) hhmm else timeStr,
+                // UI labels this "UTC"; WCM times are CST, so format from the epoch.
+                timeLabel = utcHhmm.format(java.util.Date(epoch)),
                 epochMs = epoch,
                 fScale = fScale,
                 location = place,
@@ -630,19 +627,8 @@ class SevereWeatherService(
     private fun spcDailyReportUrl(yyMMdd: String): String =
         "https://www.spc.noaa.gov/climo/reports/${yyMMdd}_rpts.html"
 
-    private fun parseSpcTime(dayUtc: Calendar, hhmm: String): Long {
-        val digits = hhmm.filter { it.isDigit() }
-        if (digits.length < 3) return dayUtc.timeInMillis
-        val padded = digits.padStart(4, '0')
-        val h = padded.substring(0, 2).toIntOrNull() ?: 0
-        val m = padded.substring(2, 4).toIntOrNull() ?: 0
-        val c = dayUtc.clone() as Calendar
-        c.set(Calendar.HOUR_OF_DAY, h.coerceIn(0, 23))
-        c.set(Calendar.MINUTE, m.coerceIn(0, 59))
-        c.set(Calendar.SECOND, 0)
-        c.set(Calendar.MILLISECOND, 0)
-        return c.timeInMillis
-    }
+    private fun parseSpcTime(dayUtc: Calendar, hhmm: String): Long =
+        spcDailyReportEpochMs(dayUtc, hhmm)
 
     private fun parseCsvLine(line: String): List<String> {
         val out = ArrayList<String>()
@@ -731,10 +717,103 @@ class SevereWeatherService(
          * True when [body] is an SPC daily storm-report CSV (header-only files
          * count: they mean "no reports that day"). Error pages are HTML.
          */
+        /**
+         * SPC daily storm-report files cover 1200 UTC on the file date to 1159 UTC
+         * the next day, so times 0000–1159 belong to the following UTC date.
+         */
+        internal fun spcDailyReportEpochMs(fileDayUtc: Calendar, hhmm: String): Long {
+            val c = (fileDayUtc.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val digits = hhmm.filter { it.isDigit() }
+            if (digits.length < 3) return c.timeInMillis
+            val padded = digits.padStart(4, '0')
+            val h = padded.substring(0, 2).toIntOrNull()?.coerceIn(0, 23) ?: 0
+            val m = padded.substring(2, 4).toIntOrNull()?.coerceIn(0, 59) ?: 0
+            if (h < 12) c.add(Calendar.DAY_OF_YEAR, 1)
+            c.set(Calendar.HOUR_OF_DAY, h)
+            c.set(Calendar.MINUTE, m)
+            return c.timeInMillis
+        }
+
+        /**
+         * WCM tornado rows give local date/time with a `tz` code: 9 = GMT, and
+         * everything else (3 in nearly all rows) is CST, a fixed UTC−6 with no DST.
+         */
+        internal fun wcmEpochMs(
+            year: Int,
+            month: Int,
+            day: Int,
+            hour: Int,
+            minute: Int,
+            tzCode: String,
+        ): Long {
+            val zone = if (tzCode == "9") "UTC" else "GMT-06:00"
+            return Calendar.getInstance(TimeZone.getTimeZone(zone)).apply {
+                clear()
+                set(year, (month - 1).coerceIn(0, 11), day.coerceIn(1, 31), hour.coerceIn(0, 23), minute.coerceIn(0, 59), 0)
+            }.timeInMillis
+        }
+
+        /** Same tornado in both sources: observed max 2.1 mi / 6 min apart (Oct–Dec 2025). */
+        private const val DUPLICATE_MAX_MINUTES = 30L
+        private const val DUPLICATE_MAX_MILES = 5.0
+
+        /**
+         * Merge preliminary daily reports with official WCM records without
+         * listing a tornado twice. Records within [DUPLICATE_MAX_MINUTES] and
+         * [DUPLICATE_MAX_MILES] are paired one-to-one, closest first, so a
+         * cluster of nearby tornadoes is not collapsed. A pair keeps the daily report, which has a place
+         * name, comments, and a link, and takes the official WCM EF rating when
+         * the daily rating is unknown. Unpaired records from either source stay.
+         */
+        internal fun mergeDailyAndWcm(
+            dailyReports: List<TornadoReport>,
+            wcmReports: List<TornadoReport>,
+        ): List<TornadoReport> {
+            // Same id = same record (e.g. a WCM whole-track row and its state
+            // segment share the start point); keep one, as before.
+            val daily = dailyReports.distinctBy { it.id }
+            val wcm = wcmReports.distinctBy { it.id }
+            // Every candidate pair, closest first, so the true twin wins even when
+            // another nearby record would otherwise claim the daily report first.
+            val windowMs = DUPLICATE_MAX_MINUTES * 60_000L
+            data class Pair(val d: Int, val w: Int, val miles: Double)
+            val pairs = ArrayList<Pair>()
+            for ((wi, w) in wcm.withIndex()) {
+                for ((di, d) in daily.withIndex()) {
+                    if (kotlin.math.abs(d.epochMs - w.epochMs) > windowMs) continue
+                    val miles = haversineMiles(d.latitude, d.longitude, w.latitude, w.longitude)
+                    if (miles <= DUPLICATE_MAX_MILES) pairs += Pair(di, wi, miles)
+                }
+            }
+            pairs.sortBy { it.miles }
+            val out = daily.toMutableList()
+            val dailyUsed = BooleanArray(daily.size)
+            val wcmUsed = BooleanArray(wcm.size)
+            for (p in pairs) {
+                if (dailyUsed[p.d] || wcmUsed[p.w]) continue
+                dailyUsed[p.d] = true
+                wcmUsed[p.w] = true
+                val d = daily[p.d]
+                val w = wcm[p.w]
+                if (!isRated(d.fScale) && isRated(w.fScale)) {
+                    out[p.d] = d.copy(fScale = w.fScale)
+                }
+            }
+            wcm.forEachIndexed { i, w -> if (!wcmUsed[i]) out += w }
+            return out
+        }
+
+        private fun isRated(scale: String): Boolean =
+            Regex("""^E?F[0-5]$""", RegexOption.IGNORE_CASE).matches(scale.trim())
+
         internal fun isSpcReportCsv(body: String?): Boolean =
             body != null && body.trimStart().startsWith("Time,", ignoreCase = true)
-        private const val USER_AGENT =
-            "PointForecast/1.1.7 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        private const val USER_AGENT = HttpUserAgent.VALUE
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

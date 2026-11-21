@@ -1,5 +1,6 @@
 package com.crome.forecastpoint.data
 
+import com.crome.forecastpoint.util.HttpUserAgent
 import com.crome.forecastpoint.util.WeatherMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -159,8 +160,7 @@ class OpenMeteoService(
     }
 
     companion object {
-        private const val USER_AGENT =
-            "PointForecast/1.1.3 (Android; open-source; https://github.com/crome1394/point-forecast)"
+        private const val USER_AGENT = HttpUserAgent.VALUE
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()
