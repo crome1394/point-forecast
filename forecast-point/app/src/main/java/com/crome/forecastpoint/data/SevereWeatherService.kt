@@ -771,9 +771,13 @@ class SevereWeatherService(
          * the daily rating is unknown. Unpaired records from either source stay.
          */
         internal fun mergeDailyAndWcm(
-            daily: List<TornadoReport>,
-            wcm: List<TornadoReport>,
+            dailyReports: List<TornadoReport>,
+            wcmReports: List<TornadoReport>,
         ): List<TornadoReport> {
+            // Same id = same record (e.g. a WCM whole-track row and its state
+            // segment share the start point); keep one, as before.
+            val daily = dailyReports.distinctBy { it.id }
+            val wcm = wcmReports.distinctBy { it.id }
             // Every candidate pair, closest first, so the true twin wins even when
             // another nearby record would otherwise claim the daily report first.
             val windowMs = DUPLICATE_MAX_MINUTES * 60_000L

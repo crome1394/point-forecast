@@ -68,6 +68,14 @@ class TornadoMergeTest {
     }
 
     @Test
+    fun recordsWithTheSameIdAreKeptOnce() {
+        // 2015-04-09 WCM: whole-track row and Iowa segment of one IA→IL tornado
+        val track = report("wcm_2015_4_9_41.6353_-90.8953", "2015-04-09T22:04:00Z", 41.6353, -90.8953, "EF1", "")
+        val merged = SevereWeatherService.mergeDailyAndWcm(emptyList(), listOf(track, track.copy()))
+        assertEquals(1, merged.size)
+    }
+
+    @Test
     fun wcmOnlyAndDailyOnlyRecordsAreKept() {
         assertEquals(1, SevereWeatherService.mergeDailyAndWcm(emptyList(), listOf(wcmDegray)).size)
         assertEquals(1, SevereWeatherService.mergeDailyAndWcm(listOf(dailyDegray), emptyList()).size)
