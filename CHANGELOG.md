@@ -16,6 +16,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 - Severe Weather no longer drops a whole day of tornado reports when one report time is 04:04 or 14:04 (the CSV was mistaken for a 404 error page)
 - Tornado report times are now correct. SPC daily reports between 00:00 and 11:59 UTC (US evening) were dated a day early, and official WCM records were read as UTC when they are CST, putting them 6 hours early with a CST time labeled "UTC"
+- Severe Weather no longer lists a tornado twice when both the preliminary daily reports and the official WCM records cover it (43 of 46 WCM tornadoes from Oct–Dec 2025 were duplicated). The daily entry is kept and takes the official EF rating when its own rating is unknown
 - Current Conditions shows the observation station's full name (e.g. "John Glenn Columbus International Airport") instead of only its ID ("KCMH")
 
 ## [1.1.12] — 2026-10-11

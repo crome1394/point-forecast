@@ -252,20 +252,18 @@ class SevereWeatherService(
         val now = System.currentTimeMillis()
         val dayMs = 24L * 3600L * 1000L
         val dailyHorizonStart = now - DAILY_CSV_LOOKBACK_DAYS.toLong() * dayMs
-        val merged = LinkedHashMap<String, TornadoReport>()
-
         // Preliminary daily reports for the recent portion of the window
-        if (endMs >= dailyHorizonStart) {
+        val daily = if (endMs >= dailyHorizonStart) {
             val dailyFrom = maxOf(startMs, dailyHorizonStart)
             fetchDailyTornadoReports(refLat, refLon, maxMiles, dailyFrom, endMs)
-                .forEach { merged[it.id] = it }
+        } else {
+            emptyList()
         }
 
         // Official / multi-decade WCM (no-op for years with missing files)
-        fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
-            .forEach { merged.putIfAbsent(it.id, it) }
+        val wcm = fetchWcmTornadoReports(refLat, refLon, maxMiles, startMs, endMs)
 
-        return selectTimeSpanningReports(merged.values.toList(), UI_MAX_REPORTS)
+        return selectTimeSpanningReports(mergeDailyAndWcm(daily, wcm), UI_MAX_REPORTS)
             .sortedByDescending { it.epochMs }
     }
 
@@ -759,6 +757,55 @@ class SevereWeatherService(
                 set(year, (month - 1).coerceIn(0, 11), day.coerceIn(1, 31), hour.coerceIn(0, 23), minute.coerceIn(0, 59), 0)
             }.timeInMillis
         }
+
+        /** Same tornado in both sources: observed max 2.1 mi / 6 min apart (Oct–Dec 2025). */
+        private const val DUPLICATE_MAX_MINUTES = 30L
+        private const val DUPLICATE_MAX_MILES = 5.0
+
+        /**
+         * Merge preliminary daily reports with official WCM records without
+         * listing a tornado twice. Records within [DUPLICATE_MAX_MINUTES] and
+         * [DUPLICATE_MAX_MILES] are paired one-to-one, closest first, so a
+         * cluster of nearby tornadoes is not collapsed. A pair keeps the daily report, which has a place
+         * name, comments, and a link, and takes the official WCM EF rating when
+         * the daily rating is unknown. Unpaired records from either source stay.
+         */
+        internal fun mergeDailyAndWcm(
+            daily: List<TornadoReport>,
+            wcm: List<TornadoReport>,
+        ): List<TornadoReport> {
+            // Every candidate pair, closest first, so the true twin wins even when
+            // another nearby record would otherwise claim the daily report first.
+            val windowMs = DUPLICATE_MAX_MINUTES * 60_000L
+            data class Pair(val d: Int, val w: Int, val miles: Double)
+            val pairs = ArrayList<Pair>()
+            for ((wi, w) in wcm.withIndex()) {
+                for ((di, d) in daily.withIndex()) {
+                    if (kotlin.math.abs(d.epochMs - w.epochMs) > windowMs) continue
+                    val miles = haversineMiles(d.latitude, d.longitude, w.latitude, w.longitude)
+                    if (miles <= DUPLICATE_MAX_MILES) pairs += Pair(di, wi, miles)
+                }
+            }
+            pairs.sortBy { it.miles }
+            val out = daily.toMutableList()
+            val dailyUsed = BooleanArray(daily.size)
+            val wcmUsed = BooleanArray(wcm.size)
+            for (p in pairs) {
+                if (dailyUsed[p.d] || wcmUsed[p.w]) continue
+                dailyUsed[p.d] = true
+                wcmUsed[p.w] = true
+                val d = daily[p.d]
+                val w = wcm[p.w]
+                if (!isRated(d.fScale) && isRated(w.fScale)) {
+                    out[p.d] = d.copy(fScale = w.fScale)
+                }
+            }
+            wcm.forEachIndexed { i, w -> if (!wcmUsed[i]) out += w }
+            return out
+        }
+
+        private fun isRated(scale: String): Boolean =
+            Regex("""^E?F[0-5]$""", RegexOption.IGNORE_CASE).matches(scale.trim())
 
         internal fun isSpcReportCsv(body: String?): Boolean =
             body != null && body.trimStart().startsWith("Time,", ignoreCase = true)
