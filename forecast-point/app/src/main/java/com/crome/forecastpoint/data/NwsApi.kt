@@ -409,7 +409,11 @@ class NwsApi(
                 ?.optJSONObject("properties")?.optString("stationIdentifier")
                 ?.takeIf { it.isNotBlank() }
                 ?: return@runCatching null
-            getJson("https://api.weather.gov/stations/$stationId/observations/latest")
+            // /observations/latest often has null temperature / text; take the
+            // newest of the last few reports that actually has a temperature.
+            NwsApiFallback.pickObservation(
+                getJson("https://api.weather.gov/stations/$stationId/observations?limit=6"),
+            )
         }.getOrNull()
         return NwsApiFallback.mapClickRoot(points, forecast, observation)
     }

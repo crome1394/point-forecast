@@ -95,7 +95,22 @@ internal object NwsApiFallback {
         return root
     }
 
-    /** `/stations/{id}/observations/latest` (SI) → MapClick currentobservation (US). */
+    /**
+     * From `/stations/{id}/observations` (newest first), the newest report with a
+     * temperature. Falls back to the newest report when none has one.
+     */
+    fun pickObservation(collection: JSONObject): JSONObject? {
+        val features = collection.optJSONArray("features") ?: return null
+        var newest: JSONObject? = null
+        for (i in 0 until features.length()) {
+            val f = features.optJSONObject(i) ?: continue
+            if (newest == null) newest = f
+            if (f.optJSONObject("properties")?.q("temperature") != null) return f
+        }
+        return newest
+    }
+
+    /** One station observation feature (SI) → MapClick currentobservation (US). */
     fun currentObservation(observation: JSONObject, timeZoneId: String? = null): JSONObject {
         val o = observation.optJSONObject("properties") ?: JSONObject()
         val out = JSONObject()

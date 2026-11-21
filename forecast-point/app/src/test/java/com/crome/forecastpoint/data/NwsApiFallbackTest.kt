@@ -98,6 +98,27 @@ class NwsApiFallbackTest {
     }
 
     @Test
+    fun observationWithTemperatureIsPreferred() {
+        // Shape seen live for KBJJ: newest report has null temperature and blank text.
+        val collection = JSONObject(
+            """{"features":[
+                {"properties":{"timestamp":"2026-11-21T03:56:00+00:00","textDescription":"",
+                  "temperature":{"value":null},"dewpoint":{"value":0}}},
+                {"properties":{"timestamp":"2026-11-21T03:35:00+00:00","textDescription":"Clear",
+                  "temperature":{"value":3},"dewpoint":{"value":0}}}]}""",
+        )
+        val picked = NwsApiFallback.pickObservation(collection)!!
+        assertEquals("Clear", picked.getJSONObject("properties").getString("textDescription"))
+
+        val allNull = JSONObject(
+            """{"features":[{"properties":{"timestamp":"t1","temperature":{"value":null}}},
+                {"properties":{"timestamp":"t2","temperature":{"value":null}}}]}""",
+        )
+        assertEquals("t1", NwsApiFallback.pickObservation(allNull)!!.getJSONObject("properties").getString("timestamp"))
+        assertNull(NwsApiFallback.pickObservation(JSONObject("{}")))
+    }
+
+    @Test
     fun windStringParsing() {
         assertEquals(3, NwsApiFallback.windMph("3 mph"))
         assertEquals(15, NwsApiFallback.windMph("10 to 15 mph"))
