@@ -54,6 +54,23 @@ object TideGraphData {
         )
     }
 
+    /** Next turning point of each type at or after [nowEpochSec]. */
+    data class NextTideEvents(
+        val low: Extreme?,
+        val high: Extreme?,
+    ) {
+        /** Left-to-right widget order, regardless of which type comes first. */
+        fun ordered(): List<Extreme> = listOfNotNull(low, high).sortedBy { it.epochHour }
+    }
+
+    fun nextEvents(heights: Map<Long, Double>, nowEpochSec: Long): NextTideEvents {
+        val upcoming = extrema(heights).filter { it.epochHour >= nowEpochSec }
+        return NextTideEvents(
+            low = upcoming.firstOrNull { it.type == "LOW" },
+            high = upcoming.firstOrNull { it.type == "HIGH" },
+        )
+    }
+
     /** Fractional local hour for drawing a "now" marker on a 24-hour chart. */
     fun localHourFraction(epochMs: Long, timeZoneId: String?): Float {
         val tz = timeZoneId?.let { TimeZone.getTimeZone(it) } ?: TimeZone.getDefault()

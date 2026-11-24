@@ -132,6 +132,43 @@ class TideGraphDataTest {
     }
 
     @Test
+    fun nextEventsPicksEarliestLowAndHighAtOrAfterNow() {
+        val heights = series(
+            hour(0, 1) to 2.0,
+            hour(0, 2) to 0.5,
+            hour(0, 3) to 3.0,
+            hour(0, 4) to 0.2,
+            hour(0, 5) to 2.5,
+        )
+
+        val next = TideGraphData.nextEvents(heights, nowEpochSec = hour(0, 3))
+
+        assertEquals(hour(0, 4), next.low?.epochHour)
+        assertEquals(hour(0, 3), next.high?.epochHour)
+    }
+
+    @Test
+    fun nextEventsCanBeOrderedChronologically() {
+        val low = TideGraphData.Extreme(epochHour = 20L, heightFt = 0.3, type = "LOW")
+        val high = TideGraphData.Extreme(epochHour = 12L, heightFt = 3.2, type = "HIGH")
+
+        val ordered = TideGraphData.NextTideEvents(low = low, high = high).ordered()
+
+        assertEquals(listOf(12L, 20L), ordered.map { it.epochHour })
+        assertEquals(listOf("HIGH", "LOW"), ordered.map { it.type })
+    }
+
+    @Test
+    fun nextEventsIsNullWhenNothingIsAhead() {
+        val heights = series(hour(0, 1) to 1.0, hour(0, 2) to 2.0, hour(0, 3) to 0.5)
+
+        val next = TideGraphData.nextEvents(heights, nowEpochSec = hour(0, 9))
+
+        assertEquals(null, next.low)
+        assertEquals(null, next.high)
+    }
+
+    @Test
     fun localHourFractionUsesForecastZone() {
         val instant = OffsetDateTime.parse("2026-11-24T12:30:00Z").toInstant().toEpochMilli()
 
