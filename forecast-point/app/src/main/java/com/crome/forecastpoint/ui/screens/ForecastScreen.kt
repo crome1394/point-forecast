@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +58,7 @@ import com.crome.forecastpoint.ui.theme.HighTemp
 import com.crome.forecastpoint.ui.theme.LowTemp
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.SurfaceDark
+import com.crome.forecastpoint.util.ClockTime
 import com.crome.forecastpoint.util.TideGraphData
 import com.crome.forecastpoint.util.Units
 import java.text.SimpleDateFormat
@@ -97,6 +99,8 @@ fun ForecastScreen(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
         ) {
+            val context = LocalContext.current
+            val use24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
             // LazyColumn: only visible day cards compose → smoother scroll
             LazyColumn(Modifier.fillMaxSize()) {
                 if (snapshot != null) {
@@ -132,12 +136,13 @@ fun ForecastScreen(
                         key = { index, day -> "${index}|${day.dateLabel}|${day.dayName}" },
                         contentType = { _, _ -> "day" },
                     ) { _, day ->
-                        DayCard(
-                            day = day,
-                            storedMetric = snapshot.units.isMetric,
-                            metricUnits = metricUnits,
-                            onClick = { onDayClick(day); onOpenHourly() },
-                        )
+                            DayCard(
+                                day = day,
+                                storedMetric = snapshot.units.isMetric,
+                                metricUnits = metricUnits,
+                                use24Hour = use24Hour,
+                                onClick = { onDayClick(day); onOpenHourly() },
+                            )
                     }
                     item(key = "bottom_pad") { Spacer(Modifier.height(24.dp)) }
                 } else {
@@ -568,6 +573,7 @@ private fun DayCard(
     day: DayForecast,
     storedMetric: Boolean,
     metricUnits: Boolean,
+    use24Hour: Boolean,
     onClick: () -> Unit,
 ) {
     Card(
@@ -633,12 +639,12 @@ private fun DayCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.WbSunny, null, tint = Amber, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(day.sunrise ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
+                    Text(ClockTime.format(day.sunrise, use24Hour) ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.WbSunny, null, tint = Amber, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(day.sunset ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
+                    Text(ClockTime.format(day.sunset, use24Hour) ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
                 }
             }
         }

@@ -16,6 +16,7 @@ import com.crome.forecastpoint.data.ForecastPeriod
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
+import com.crome.forecastpoint.util.ClockTime
 import com.crome.forecastpoint.util.IconMapper
 import com.crome.forecastpoint.util.TideGraphData
 import com.crome.forecastpoint.util.Units
@@ -152,8 +153,9 @@ object WeatherWidgetUpdater {
             R.id.widget_temp,
             Units.temperature(snap.current.temperatureF, storedMetric, displayMetric),
         )
-        views.setTextViewText(R.id.widget_sunrise, snap.sunrise ?: "—")
-        views.setTextViewText(R.id.widget_sunset, snap.sunset ?: "—")
+        val use24Hour = android.text.format.DateFormat.is24HourFormat(context)
+        views.setTextViewText(R.id.widget_sunrise, ClockTime.format(snap.sunrise, use24Hour) ?: "—")
+        views.setTextViewText(R.id.widget_sunset, ClockTime.format(snap.sunset, use24Hour) ?: "—")
         bindTideRow(context, views, snap, storedMetric, displayMetric, minWidthDp)
 
         IconMapper.loadBitmap(context, snap.current.iconCode, maxPx = currentIconPx)?.let {
