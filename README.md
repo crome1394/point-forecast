@@ -36,6 +36,8 @@ Point Forecast shows the NWS forecast for any U.S. point, along with hourly tabl
 |---|---|
 | **Forecast** | Current conditions and the multi-day NWS forecast, with pull-to-refresh |
 | **Hourly** | Tabs you can reorder: temperature, precipitation, wind, tides, air quality, visibility, pressure, UV, and space weather |
+| **Tides** | Diagram of the nearest NOAA station for each city, with coordinates and station code; all saved cities are one tap away |
+| **Today's tides** | Two lows and two highs in a compact table under Current Conditions, hidden for landlocked cities |
 | **Alerts** | Active watches, warnings, and advisories from NWS CAP |
 | **Map and radar** | Pick a location on OpenStreetMap or search by city; open weather.gov radar from the app bar |
 | **Hazard hub** | Sun and moon, space weather, earthquakes, tornadoes, and tropical cyclones, with maps and history windows |

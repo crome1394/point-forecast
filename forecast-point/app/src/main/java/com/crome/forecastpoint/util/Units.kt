@@ -80,6 +80,17 @@ object Units {
         return String.format(Locale.US, "%.2f %s", shown, unit)
     }
 
+    /** Compact widget form: "0.3ft" / "0.09m". */
+    fun tideHeightCompact(value: Double?, storedMetric: Boolean, displayMetric: Boolean): String {
+        if (value == null) return ""
+        val shown = convertHeight(value, storedMetric, displayMetric)
+        val pattern = if (displayMetric) "%.2f" else "%.1f"
+        val amount = String.format(Locale.US, pattern, shown)
+            .trimEnd('0')
+            .trimEnd('.')
+        return "$amount${if (displayMetric) "m" else "ft"}"
+    }
+
     /** Tide-station distance. [miles] is always statute miles. */
     fun distanceFromMiles(miles: Double, displayMetric: Boolean): String =
         if (displayMetric) {

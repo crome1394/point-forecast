@@ -32,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -42,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,14 +54,17 @@ import com.crome.forecastpoint.data.WeatherHazard
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.ui.components.NwsIcon
 import com.crome.forecastpoint.ui.theme.Amber
-import com.crome.forecastpoint.util.Units
 import com.crome.forecastpoint.ui.theme.HighTemp
 import com.crome.forecastpoint.ui.theme.LowTemp
 import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
 import com.crome.forecastpoint.ui.theme.SurfaceDark
+import com.crome.forecastpoint.util.ClockTime
+import com.crome.forecastpoint.util.TideGraphData
+import com.crome.forecastpoint.util.Units
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,6 +99,8 @@ fun ForecastScreen(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
         ) {
+            val context = LocalContext.current
+            val use24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
             // LazyColumn: only visible day cards compose → smoother scroll
             LazyColumn(Modifier.fillMaxSize()) {
                 if (snapshot != null) {
@@ -129,12 +136,13 @@ fun ForecastScreen(
                         key = { index, day -> "${index}|${day.dateLabel}|${day.dayName}" },
                         contentType = { _, _ -> "day" },
                     ) { _, day ->
-                        DayCard(
-                            day = day,
-                            storedMetric = snapshot.units.isMetric,
-                            metricUnits = metricUnits,
-                            onClick = { onDayClick(day); onOpenHourly() },
-                        )
+                            DayCard(
+                                day = day,
+                                storedMetric = snapshot.units.isMetric,
+                                metricUnits = metricUnits,
+                                use24Hour = use24Hour,
+                                onClick = { onDayClick(day); onOpenHourly() },
+                            )
                     }
                     item(key = "bottom_pad") { Spacer(Modifier.height(24.dp)) }
                 } else {
@@ -312,6 +320,37 @@ private fun CurrentConditionsCard(
                         Units.barometer(current.barometerInHg, current.barometerMb, metricUnits),
                     )
 
+                    val tideInfo = snapshot.tideInfo
+                    if (tideInfo != null && tideInfo.stationName.isNotBlank()) {
+                        val tideHeights = remember(snapshot.hourly) {
+                            snapshot.hourly.mapNotNull { row ->
+                                val epoch = row.epochSec ?: return@mapNotNull null
+                                val height = row.tideFt ?: return@mapNotNull null
+                                (epoch / 3600L) * 3600L to height
+                            }.toMap()
+                        }
+                        val zone = remember(snapshot.timeZoneId) {
+                            snapshot.timeZoneId?.let { TimeZone.getTimeZone(it) }
+                        }
+                        val tideEvents = remember(tideHeights, zone, snapshot.updatedAtEpochMs) {
+                            TideGraphData.todayEvents(
+                                heights = tideHeights,
+                                timeZoneId = zone?.id,
+                                nowEpochMs = snapshot.updatedAtEpochMs,
+                            )
+                        }
+                        if (tideEvents.lows.isNotEmpty() || tideEvents.highs.isNotEmpty()) {
+                            TodayTideTable(
+                                events = tideEvents,
+                                stationName = tideInfo.stationName,
+                                timeZone = zone,
+                                storedMetric = storedMetric,
+                                metricUnits = metricUnits,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
+                        }
+                    }
+
                     if (hazards.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -333,6 +372,81 @@ private fun CurrentConditionsCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TodayTideTable(
+    events: TideGraphData.TodayTideEvents,
+    stationName: String,
+    timeZone: TimeZone?,
+    storedMetric: Boolean,
+    metricUnits: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val timeFmt = remember(timeZone) {
+        SimpleDateFormat("HH:mm", Locale.US).apply {
+            if (timeZone != null) this.timeZone = timeZone
+        }
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = SurfaceDark,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "Today's tides",
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+            )
+            Text(
+                stationName,
+                color = OnSurfaceMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            repeat(maxOf(events.lows.size, events.highs.size)) { index ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        events.lows.getOrNull(index)?.let { low ->
+                            TideEventCell(low, "Low", Color(0xFF4DD0E1), timeFmt, storedMetric, metricUnits)
+                        }
+                    }
+                    Box(Modifier.weight(1f)) {
+                        events.highs.getOrNull(index)?.let { high ->
+                            TideEventCell(high, "High", Amber, timeFmt, storedMetric, metricUnits)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TideEventCell(
+    event: TideGraphData.Extreme,
+    label: String,
+    tint: Color,
+    timeFmt: SimpleDateFormat,
+    storedMetric: Boolean,
+    metricUnits: Boolean,
+) {
+    Column {
+        Text(
+            "$label: ${Units.tideHeight(event.heightFt, storedMetric, metricUnits)}",
+            color = tint,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            timeFmt.format(Date(event.epochHour * 1000L)),
+            color = OnSurfaceMuted,
+            fontSize = 12.sp,
+        )
     }
 }
 
@@ -459,6 +573,7 @@ private fun DayCard(
     day: DayForecast,
     storedMetric: Boolean,
     metricUnits: Boolean,
+    use24Hour: Boolean,
     onClick: () -> Unit,
 ) {
     Card(
@@ -524,12 +639,12 @@ private fun DayCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.WbSunny, null, tint = Amber, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(day.sunrise ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
+                    Text(ClockTime.format(day.sunrise, use24Hour) ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.WbSunny, null, tint = Amber, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(day.sunset ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
+                    Text(ClockTime.format(day.sunset, use24Hour) ?: "—", color = OnSurfaceMuted, fontSize = 13.sp)
                 }
             }
         }

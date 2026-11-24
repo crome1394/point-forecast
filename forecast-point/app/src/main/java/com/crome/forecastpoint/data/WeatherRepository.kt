@@ -3,18 +3,19 @@ package com.crome.forecastpoint.data
 import android.content.Context
 import com.crome.forecastpoint.widget.WeatherWidgetUpdater
 import com.crome.forecastpoint.worker.WeatherUpdateScheduler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class WeatherRepository(
     private val context: Context,
-    private val api: NwsApi = NwsApi(
-        tideService = TideService(context.applicationContext),
-    ),
+    val tideService: TideService = TideService(context.applicationContext),
+    private val api: NwsApi = NwsApi(tideService = tideService),
     private val prefs: PreferencesRepository = PreferencesRepository(context),
 ) {
     private val _snapshot = MutableStateFlow<WeatherSnapshot?>(null)
@@ -36,6 +37,19 @@ class WeatherRepository(
         // so a false banner does not linger until the next network refresh.
         _snapshot.value = prefs.getSnapshotOnce()?.let { sanitizeHazards(it) }
         WeatherUpdateScheduler.reconcile(context)
+        prefs.getActiveLocationOnce()?.let { ensureTideStation(it) }
+    }
+
+    /**
+     * Remember the nearest gauge for a city the first time it is opened or added.
+     * A stored choice is kept so the diagram stays tied to the same station.
+     */
+    suspend fun ensureTideStation(loc: SavedLocation): TideStationChoice? = withContext(Dispatchers.IO) {
+        prefs.getTideStationOnce(loc.id)?.let { return@withContext it }
+        val station = tideService.nearestStation(loc.latitude, loc.longitude) ?: return@withContext null
+        val choice = TideStationChoice.from(station, loc.latitude, loc.longitude)
+        prefs.setTideStation(loc.id, choice)
+        choice
     }
 
     /** Remove routine outlook products that must not be shown as active hazards. */
@@ -164,6 +178,7 @@ class WeatherRepository(
         if (!saveFavorite) {
             prefs.setLastTransientLocation(loc)
         }
+        ensureTideStation(loc)
         if (fetch) refresh(loc.latitude, loc.longitude, loc.name, manual = true)
     }
 

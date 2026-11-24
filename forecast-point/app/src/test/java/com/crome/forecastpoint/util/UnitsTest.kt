@@ -53,6 +53,13 @@ class UnitsTest {
     }
 
     @Test
+    fun tideHeightCompactDropsTrailingZero() {
+        assertEquals("0.3ft", Units.tideHeightCompact(0.3, storedMetric = false, displayMetric = false))
+        assertEquals("0.09m", Units.tideHeightCompact(0.3, storedMetric = false, displayMetric = true))
+        assertEquals("3.2ft", Units.tideHeightCompact(3.2, storedMetric = false, displayMetric = false))
+    }
+
+    @Test
     fun hazardDistancesFollowTheDisplayUnit() {
         assertEquals("Mi", Units.hazardDistanceHeader(false))
         assertEquals("km", Units.hazardDistanceHeader(true))

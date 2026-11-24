@@ -10,21 +10,21 @@ All source is under `forecast-point/app/src/main/java/com/crome/forecastpoint/`.
 |---|---|
 | `MainActivity.kt` | Compose host, navigation, drawer, and app bar |
 | `ForecastPointApp.kt` | Application class; holds the shared `WeatherRepository` |
-| `ui/WeatherViewModel.kt` | Screen state; owns the space weather, earthquake, and severe weather services |
-| `ui/screens/` | One file per screen (Forecast, Hourly, Map, Search, Settings, Sun & Moon, Space Weather, Earthquakes, Severe Weather, About) |
+| `ui/WeatherViewModel.kt` | Screen state; owns the space weather, earthquake, severe weather, and tide service state |
+| `ui/screens/` | One file per screen (Forecast, Hourly, Map, Search, Settings, Sun & Moon, Tides, Space Weather, Earthquakes, Severe Weather, About) |
 | `data/WeatherRepository.kt` | Single entry point for forecast refreshes. A mutex stops overlapping refreshes from the UI, widget, and worker |
 | `data/NwsApi.kt` | Builds the forecast snapshot from NWS and merges in tides and Open-Meteo extras. Also handles Nominatim geocoding |
 | `data/NwsApiFallback.kt` | Converts api.weather.gov forecast, hourly, and observation JSON into the MapClick shapes `NwsApi` parses |
-| `data/TideService.kt`, `data/UsgsWaterData.kt` | Water level: picks the nearest NOAA CO-OPS station or USGS stream gage |
+| `data/TideService.kt`, `data/TideStationSelector.kt`, `data/TideStationChoice.kt`, `data/UsgsWaterData.kt` | Water level: picks the nearest NOAA CO-OPS station or USGS stream gage and fetches its heights |
 | `data/OpenMeteoService.kt` | Optional UV, visibility, pressure, and air quality |
 | `data/SpaceWeatherService.kt` | NOAA SWPC Kp forecast and R/S/G scales |
 | `data/EarthquakeService.kt` | USGS FDSN event queries |
 | `data/SevereWeatherService.kt` | SPC tornado reports, NHC storms, and local tropical and tornado CAP alerts |
-| `data/PreferencesRepository.kt` | DataStore: settings, saved cities, and the last snapshot |
+| `data/PreferencesRepository.kt` | DataStore: settings, saved cities, the nearest tide station per city, and the last snapshot |
 | `data/Models.kt` | `WeatherSnapshot` and the other data classes stored in DataStore |
 | `worker/` | WorkManager periodic refresh, rescheduled after boot |
 | `widget/` | Home screen widget. It reads the cached snapshot and refreshes through the repository |
-| `util/` | Unit conversion, icon mapping, sun and moon math, time zones, radar URLs, map tiles |
+| `util/` | Unit conversion, icon mapping, sun and moon math, tide graph and station labels, time zones, radar URLs, map tiles |
 
 ## Forecast refresh
 
@@ -55,6 +55,10 @@ MapClick is undocumented, so both MapClick requests have an api.weather.gov fall
 
 `digitalJSON` gives hourly arrays in the correct order, but its `time` and `unixtime` labels are often wrong. `parseHourly` ignores those labels and stamps the rows as a continuous series that starts at the first MapClick period's `startValidTime`. That series matches `api.weather.gov/.../forecast/hourly`. Rows from the api.weather.gov fallback already have correct timestamps, so they are not re-stamped. Grid values (QPF, gust, dew point, visibility) are expanded from ISO-8601 intervals into hourly buckets and joined on the epoch hour.
 
+### Tides
+
+`TideStationSelector` picks the nearest usable gauge (tide predictions, then water levels, then USGS stage) when a city is added or opened; `PreferencesRepository` remembers that choice per city id. The Tides screen fetches hourly heights for the remembered station through `TideService` and draws the curve with the pure `TideGraphData` helpers. The Forecast screen's "Today's tides" table reuses the tide values already merged into `WeatherSnapshot.hourly`, so it costs no extra request and stays hidden when no station is in range.
+
 ### Units
 
 MapClick `unit=1` returns forecast temperatures and text in metric. Current observations and digital wind stay in US units, so `NwsApi` converts them. Grid values are always SI. The snapshot records which unit system it was built in, and a unit change forces a refresh.
@@ -71,7 +75,7 @@ MapClick `unit=1` returns forecast temperatures and text in metric. Current obse
 | Hourly | `forecast.weather.gov/MapClick.php?FcstType=digitalJSON` | `NwsApi` | api.weather.gov `/forecast/hourly` |
 | Grid series | `api.weather.gov/points`, `/gridpoints` | `NwsApi` | No QPF; gust and dew point fall back to digital or computed values |
 | Alerts | `api.weather.gov/alerts/active` | `NwsApi`, `SevereWeatherService` | MapClick hazard list |
-| Tides | `api.tidesandcurrents.noaa.gov` (datagetter, mdapi) | `TideService` | Tide tab shows the reason |
+| Tides | `api.tidesandcurrents.noaa.gov` (datagetter, mdapi) | `TideService`, Tides screen, Forecast tide table | Tide tab shows the reason |
 | River stage | `api.waterdata.usgs.gov/ogcapi/v1` | `UsgsWaterData` | Tide tab shows the reason |
 | UV, pressure, visibility | `api.open-meteo.com/v1/forecast` | `OpenMeteoService` | Columns blank (optional in Settings) |
 | Air quality | `air-quality-api.open-meteo.com/v1/air-quality` | `OpenMeteoService` | Columns blank (optional in Settings) |

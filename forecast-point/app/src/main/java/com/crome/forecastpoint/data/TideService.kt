@@ -69,46 +69,13 @@ class TideService(
     private var memoryStations: List<TideStation>? = null
 
     fun fetchHourlyTides(latitude: Double, longitude: Double): TideResult {
-        val coops = loadCoopsStations()
-
-        val nearestTide = coops
-            .asSequence()
-            .filter { it.kind == StationKind.TidePrediction }
-            .minByOrNull { haversineMiles(latitude, longitude, it.lat, it.lon) }
-        val nearestWater = coops
-            .asSequence()
-            .filter { it.kind == StationKind.WaterLevel }
-            .minByOrNull { haversineMiles(latitude, longitude, it.lat, it.lon) }
-
-        val tideDist = nearestTide?.let { haversineMiles(latitude, longitude, it.lat, it.lon) }
-        val waterDist = nearestWater?.let { haversineMiles(latitude, longitude, it.lat, it.lon) }
-
-        // 1) Coastal / estuary tide forecast (best for ocean open-water swims)
-        if (nearestTide != null && tideDist != null && tideDist <= MAX_TIDE_PRED_MILES) {
-            val heights = fetchTidePredictions(nearestTide.id)
-            return TideResult(
-                station = nearestTide,
-                distanceMiles = tideDist,
-                heightByEpochHour = heights,
-                unavailableReason = if (heights.isEmpty()) "No tide predictions" else null,
-                datumLabel = "MLLW",
-            )
+        val station = nearestStation(latitude, longitude)
+        if (station != null) {
+            return fetchForStation(station, latitude, longitude)
         }
 
-        // 2) Great Lakes / CO-OPS water level
-        if (nearestWater != null && waterDist != null && waterDist <= MAX_COOPS_WATER_MILES) {
-            val heights = fetchWaterLevels(nearestWater.id)
-            return TideResult(
-                station = nearestWater,
-                distanceMiles = waterDist,
-                heightByEpochHour = heights,
-                unavailableReason = if (heights.isEmpty()) "No water-level data" else null,
-                datumLabel = "LWD",
-            )
-        }
-
-        // 3) USGS river / lake stage (covers most interior US cities)
-        val usgs = findNearestUsgsGage(latitude, longitude, MAX_USGS_MILES)
+        // USGS river / lake stage (covers most interior US cities)
+        val usgs = findNearestUsgsGage(latitude, longitude, TideStationSelector.MAX_USGS_MILES)
         if (usgs != null) {
             val heights = fetchUsgsGageHeights(usgs.seriesId)
             return TideResult(
@@ -121,18 +88,67 @@ class TideService(
         }
 
         // Nothing in range — report closest CO-OPS station for diagnostics
-        val fallback = listOfNotNull(
-            nearestTide?.let { it to (tideDist ?: Double.MAX_VALUE) },
-            nearestWater?.let { it to (waterDist ?: Double.MAX_VALUE) },
-        ).minByOrNull { it.second }
-
+        val fallback = loadCoopsStations()
+            .minByOrNull { haversineMiles(latitude, longitude, it.lat, it.lon) }
         return TideResult(
-            station = fallback?.first,
-            distanceMiles = fallback?.second?.takeIf { it < Double.MAX_VALUE / 2 },
+            station = fallback,
+            distanceMiles = fallback?.let { haversineMiles(latitude, longitude, it.lat, it.lon) },
             heightByEpochHour = emptyMap(),
             unavailableReason =
-                "No tide, lake, or river gauge within ${MAX_USGS_MILES.toInt()} mi " +
-                    "(USGS) / ${MAX_TIDE_PRED_MILES.toInt()} mi (NOAA tides)",
+                "No tide, lake, or river gauge within ${TideStationSelector.MAX_USGS_MILES.toInt()} mi " +
+                    "(USGS) / ${TideStationSelector.MAX_TIDE_PRED_MILES.toInt()} mi (NOAA tides)",
+        )
+    }
+
+    /**
+     * Resolve the gauge to remember for a city using the same priority as the forecast:
+     * coastal tide predictions, then CO-OPS water levels, then USGS stage.
+     */
+    fun nearestStation(latitude: Double, longitude: Double): TideStation? {
+        val stations = loadCoopsStations()
+        val candidates = stations.map { station ->
+            TideStationSelector.Candidate(
+                id = station.id,
+                name = station.name,
+                lat = station.lat,
+                lon = station.lon,
+                kind = when (station.kind) {
+                    StationKind.WaterLevel -> TideStationSelector.Kind.WaterLevel
+                    StationKind.UsgsGage -> TideStationSelector.Kind.UsgsGage
+                    else -> TideStationSelector.Kind.TidePrediction
+                },
+            )
+        }
+        val picked = TideStationSelector.pick(candidates, latitude, longitude) ?: return null
+        return stations.firstOrNull { it.id == picked.id }
+    }
+
+    /** Hourly heights for a station that was previously picked for a city. */
+    fun fetchForStation(
+        station: TideStation,
+        latitude: Double? = null,
+        longitude: Double? = null,
+    ): TideResult {
+        val heights = when (station.kind) {
+            StationKind.TidePrediction -> fetchTidePredictions(station.id)
+            StationKind.WaterLevel -> fetchWaterLevels(station.id)
+            // USGS needs its series id, which is only known from findNearestUsgsGage.
+            StationKind.UsgsGage -> emptyMap()
+        }
+        return TideResult(
+            station = station,
+            distanceMiles = if (latitude != null && longitude != null) {
+                haversineMiles(latitude, longitude, station.lat, station.lon)
+            } else {
+                null
+            },
+            heightByEpochHour = heights,
+            unavailableReason = if (heights.isEmpty()) "No data for ${station.name}" else null,
+            datumLabel = when (station.kind) {
+                StationKind.WaterLevel -> "LWD"
+                StationKind.UsgsGage -> "gage"
+                else -> "MLLW"
+            },
         )
     }
 
@@ -529,12 +545,6 @@ class TideService(
     }
 
     companion object {
-        /** Ocean/estuary harmonic tide predictions. */
-        private const val MAX_TIDE_PRED_MILES = 120.0
-        /** Great Lakes / CO-OPS water-level gauges. */
-        private const val MAX_COOPS_WATER_MILES = 100.0
-        /** USGS stream/lake stage for interior rivers and lakes. */
-        private const val MAX_USGS_MILES = 50.0
         private val CACHE_TTL_MS = TimeUnit.DAYS.toMillis(30)
 
         fun haversineMiles(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

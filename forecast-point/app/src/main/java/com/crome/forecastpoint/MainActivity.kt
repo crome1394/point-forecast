@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Thunderstorm
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -110,6 +111,7 @@ import com.crome.forecastpoint.ui.screens.MapScreen
 import com.crome.forecastpoint.ui.screens.SearchScreen
 import com.crome.forecastpoint.ui.screens.SettingsScreen
 import com.crome.forecastpoint.ui.screens.SunMoonScreen
+import com.crome.forecastpoint.ui.screens.TideScreen
 import com.crome.forecastpoint.ui.theme.ForecastPointTheme
 import com.crome.forecastpoint.ui.theme.PrimaryBlue
 import com.crome.forecastpoint.ui.theme.SurfaceDark
@@ -156,6 +158,9 @@ class MainActivity : ComponentActivity() {
                 val severeWeatherLoading by viewModel.severeWeatherLoading.collectAsState()
                 val mapFocusRadiusMiles by viewModel.mapFocusRadiusMiles.collectAsState()
                 val hazardHistoryDays by viewModel.hazardHistoryDays.collectAsState()
+                val tideStations by viewModel.tideStations.collectAsState()
+                val tideResult by viewModel.tideResult.collectAsState()
+                val tidesLoading by viewModel.tidesLoading.collectAsState()
 
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -189,6 +194,7 @@ class MainActivity : ComponentActivity() {
                         CelestialBody.SpaceWeather -> "Space Weather"
                         CelestialBody.Earthquakes -> "Earthquakes"
                         CelestialBody.Storms -> "Severe Weather"
+                        CelestialBody.Tides -> "Tides"
                     }
                 }
 
@@ -349,6 +355,11 @@ class MainActivity : ComponentActivity() {
                             },
                             onStorms = {
                                 sunMoonBody = CelestialBody.Storms
+                                screen = AppScreen.SunMoon
+                                scope.launch { drawerState.close() }
+                            },
+                            onTides = {
+                                sunMoonBody = CelestialBody.Tides
                                 screen = AppScreen.SunMoon
                                 scope.launch { drawerState.close() }
                             },
@@ -661,52 +672,74 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
                                 AppScreen.About -> AboutScreen()
-                                AppScreen.SunMoon -> SunMoonScreen(
-                                    latitude = celestialLat,
-                                    longitude = celestialLon,
-                                    locationName = snapshot?.locationName,
-                                    body = sunMoonBody,
-                                    timeZoneId = snapshot?.timeZoneId,
-                                    spaceWeather = spaceWeather,
-                                    spaceWeatherWatchThreshold = spaceWeatherWatchThreshold,
-                                    spaceWeatherActiveThreshold = spaceWeatherActiveThreshold,
-                                    spaceWeatherForecastHorizonHours = spaceWeatherForecastHorizonHours,
-                                    earthquakes = earthquakes,
-                                    earthquakesLoading = earthquakesLoading,
-                                    onEnsureEarthquakes = { radiusMiles, historyDays, startMs, endMs ->
-                                        viewModel.ensureEarthquakes(
-                                            celestialLat,
-                                            celestialLon,
-                                            focusRadiusMiles = radiusMiles,
-                                            historyDays = historyDays,
-                                            historyStartMs = startMs,
-                                            historyEndMs = endMs,
+                                AppScreen.SunMoon -> {
+                                    if (sunMoonBody == CelestialBody.Tides) {
+                                        TideScreen(
+                                            latitude = celestialLat,
+                                            longitude = celestialLon,
+                                            locationName = snapshot?.locationName,
+                                            timeZoneId = snapshot?.timeZoneId,
+                                            station = tideStations[activeId],
+                                            result = tideResult,
+                                            loading = tidesLoading,
+                                            metricUnits = metricUnits,
+                                            favorites = favorites,
+                                            activeId = activeId,
+                                            tideStations = tideStations,
+                                            onSelectFavorite = { loc ->
+                                                viewModel.selectFavorite(loc)
+                                            },
+                                            onEnsureTides = { viewModel.ensureTides() },
                                         )
-                                    },
-                                    severeWeather = severeWeather,
-                                    severeWeatherLoading = severeWeatherLoading,
-                                    onEnsureSevereWeather = { radiusMiles, historyDays, startMs, endMs ->
-                                        viewModel.ensureSevereWeather(
-                                            celestialLat,
-                                            celestialLon,
-                                            focusRadiusMiles = radiusMiles,
-                                            historyDays = historyDays,
-                                            historyStartMs = startMs,
-                                            historyEndMs = endMs,
+                                    } else {
+                                        SunMoonScreen(
+                                        latitude = celestialLat,
+                                        longitude = celestialLon,
+                                        locationName = snapshot?.locationName,
+                                        body = sunMoonBody,
+                                        timeZoneId = snapshot?.timeZoneId,
+                                        spaceWeather = spaceWeather,
+                                        spaceWeatherWatchThreshold = spaceWeatherWatchThreshold,
+                                        spaceWeatherActiveThreshold = spaceWeatherActiveThreshold,
+                                        spaceWeatherForecastHorizonHours = spaceWeatherForecastHorizonHours,
+                                        earthquakes = earthquakes,
+                                        earthquakesLoading = earthquakesLoading,
+                                        onEnsureEarthquakes = { radiusMiles, historyDays, startMs, endMs ->
+                                            viewModel.ensureEarthquakes(
+                                                celestialLat,
+                                                celestialLon,
+                                                focusRadiusMiles = radiusMiles,
+                                                historyDays = historyDays,
+                                                historyStartMs = startMs,
+                                                historyEndMs = endMs,
+                                            )
+                                        },
+                                        severeWeather = severeWeather,
+                                        severeWeatherLoading = severeWeatherLoading,
+                                        onEnsureSevereWeather = { radiusMiles, historyDays, startMs, endMs ->
+                                            viewModel.ensureSevereWeather(
+                                                celestialLat,
+                                                celestialLon,
+                                                focusRadiusMiles = radiusMiles,
+                                                historyDays = historyDays,
+                                                historyStartMs = startMs,
+                                                historyEndMs = endMs,
+                                            )
+                                        },
+                                        mapFocusRadiusMiles = mapFocusRadiusMiles,
+                                        hazardHistoryDays = hazardHistoryDays,
+                                        metricUnits = metricUnits,
+                                        onEnsureSpaceWeather = { viewModel.ensureSpaceWeather() },
+                                        onResolveTornadoPlace = { lat, lon ->
+                                            viewModel.reverseGeocode(lat, lon).name
+                                        },
+                                        favorites = favorites,
+                                        onSelectHazardCity = { loc ->
+                                            viewModel.selectHazardCity(loc)
+                                        },
                                         )
-                                    },
-                                    mapFocusRadiusMiles = mapFocusRadiusMiles,
-                                    hazardHistoryDays = hazardHistoryDays,
-                                    metricUnits = metricUnits,
-                                    onEnsureSpaceWeather = { viewModel.ensureSpaceWeather() },
-                                    onResolveTornadoPlace = { lat, lon ->
-                                        viewModel.reverseGeocode(lat, lon).name
-                                    },
-                                    favorites = favorites,
-                                    onSelectHazardCity = { loc ->
-                                        viewModel.selectHazardCity(loc)
-                                    },
-                                )
+                                    }
+                                }
                             }
                             }
                             // Sticky above bottom title bar
@@ -813,7 +846,7 @@ private fun SunMoonPickerMenu(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                "Sun, moon, space & quakes",
+                "Sun, moon, space, quakes & tides",
                 color = Color(0xFFB0BEC5),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(bottom = 2.dp),
@@ -847,6 +880,12 @@ private fun SunMoonPickerMenu(
                 label = "Severe Weather",
                 tint = Color(0xFFFF7043),
                 onClick = { onPick(CelestialBody.Storms) },
+            )
+            CelestialMenuPill(
+                icon = Icons.Filled.Waves,
+                label = "Tides",
+                tint = Color(0xFF4DD0E1),
+                onClick = { onPick(CelestialBody.Tides) },
             )
         }
     }
@@ -897,6 +936,13 @@ private fun CelestialBodyTitleTabs(
             selected = selected == CelestialBody.Storms,
             tint = Color(0xFFFF7043),
             onClick = { onSelect(CelestialBody.Storms) },
+        )
+        TitleBodyTab(
+            icon = Icons.Filled.Waves,
+            contentDescription = "Tides",
+            selected = selected == CelestialBody.Tides,
+            tint = Color(0xFF4DD0E1),
+            onClick = { onSelect(CelestialBody.Tides) },
         )
     }
 }
@@ -969,6 +1015,7 @@ private fun AppDrawer(
     onSpaceWeather: () -> Unit,
     onEarthquakes: () -> Unit,
     onStorms: () -> Unit,
+    onTides: () -> Unit,
     onSelectFavorite: (SavedLocation) -> Unit,
     onRenameFavorite: (SavedLocation) -> Unit,
     onRemoveFavorite: (SavedLocation) -> Unit,
@@ -985,6 +1032,7 @@ private fun AppDrawer(
         "SpaceWeather" to onSpaceWeather,
         "Earthquakes" to onEarthquakes,
         "Storms" to onStorms,
+        "Tides" to onTides,
         "AddCity" to onAddCity,
     )
     val icons = mapOf(
@@ -996,6 +1044,7 @@ private fun AppDrawer(
         "SpaceWeather" to Icons.Filled.Bolt,
         "Earthquakes" to Icons.Filled.Public,
         "Storms" to Icons.Filled.Thunderstorm,
+        "Tides" to Icons.Filled.Waves,
         "AddCity" to Icons.Filled.Add,
     )
 

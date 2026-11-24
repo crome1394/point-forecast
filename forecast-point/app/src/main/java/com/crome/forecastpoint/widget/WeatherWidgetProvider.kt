@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.view.View
 import android.widget.RemoteViews
 import com.crome.forecastpoint.MainActivity
@@ -15,11 +16,14 @@ import com.crome.forecastpoint.data.ForecastPeriod
 import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
+import com.crome.forecastpoint.util.ClockTime
 import com.crome.forecastpoint.util.IconMapper
+import com.crome.forecastpoint.util.TideGraphData
 import com.crome.forecastpoint.util.Units
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class WeatherWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -149,8 +153,10 @@ object WeatherWidgetUpdater {
             R.id.widget_temp,
             Units.temperature(snap.current.temperatureF, storedMetric, displayMetric),
         )
-        views.setTextViewText(R.id.widget_sunrise, snap.sunrise ?: "—")
-        views.setTextViewText(R.id.widget_sunset, snap.sunset ?: "—")
+        val use24Hour = android.text.format.DateFormat.is24HourFormat(context)
+        views.setTextViewText(R.id.widget_sunrise, ClockTime.format(snap.sunrise, use24Hour) ?: "—")
+        views.setTextViewText(R.id.widget_sunset, ClockTime.format(snap.sunset, use24Hour) ?: "—")
+        bindTideRow(context, views, snap, storedMetric, displayMetric, minWidthDp)
 
         IconMapper.loadBitmap(context, snap.current.iconCode, maxPx = currentIconPx)?.let {
             views.setImageViewBitmap(R.id.widget_current_icon, it)
@@ -162,6 +168,68 @@ object WeatherWidgetUpdater {
             bindPeriodCells(context, views, snap.periods, dayIconPx, storedMetric, displayMetric)
         }
         return views
+    }
+
+    /**
+     * Next low and high to the right of the sunrise/sunset row. Only wide widgets
+     * have room for four items, and landlocked cities have no tide data at all.
+     */
+    private fun bindTideRow(
+        context: Context,
+        views: RemoteViews,
+        snap: WeatherSnapshot,
+        storedMetric: Boolean,
+        displayMetric: Boolean,
+        minWidthDp: Int,
+    ) {
+        val density = context.resources.displayMetrics.density
+        val defaultStart = (56f * density).toInt()
+        if (minWidthDp < 320 || snap.tideInfo?.stationName.isNullOrBlank()) {
+            views.setViewVisibility(R.id.widget_tide_group, View.GONE)
+            views.setViewPadding(R.id.widget_sun_row, defaultStart, 0, 0, 0)
+            return
+        }
+
+        val heights = snap.hourly.mapNotNull { row ->
+            val epoch = row.epochSec ?: return@mapNotNull null
+            val height = row.tideFt ?: return@mapNotNull null
+            (epoch / 3600L) * 3600L to height
+        }.toMap()
+        val next = TideGraphData.nextEvents(heights, System.currentTimeMillis() / 1000L)
+        if (next.low == null && next.high == null) {
+            views.setViewVisibility(R.id.widget_tide_group, View.GONE)
+            views.setViewPadding(R.id.widget_sun_row, defaultStart, 0, 0, 0)
+            return
+        }
+
+        val tz = snap.timeZoneId?.let { TimeZone.getTimeZone(it) }
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.US).apply {
+            if (tz != null) timeZone = tz
+        }
+        fun label(epochHour: Long, height: Double): String {
+            val amount = Units.tideHeightCompact(height, storedMetric, displayMetric)
+                .removeSuffix("ft")
+                .removeSuffix("m")
+            return "$amount ${timeFmt.format(java.util.Date(epochHour * 1000L))}"
+        }
+
+        val ordered = next.ordered()
+        val slots = intArrayOf(R.id.widget_tide_first, R.id.widget_tide_second)
+        ordered.forEachIndexed { index, extreme ->
+            views.setTextViewText(slots[index], label(extreme.epochHour, extreme.heightFt))
+            views.setInt(
+                slots[index],
+                "setTextColor",
+                if (extreme.type == "LOW") Color.rgb(77, 208, 225) else Color.rgb(255, 204, 128),
+            )
+            views.setViewVisibility(slots[index], View.VISIBLE)
+        }
+        for (index in ordered.size until slots.size) {
+            views.setViewVisibility(slots[index], View.GONE)
+        }
+
+        views.setViewVisibility(R.id.widget_tide_group, View.VISIBLE)
+        views.setViewPadding(R.id.widget_sun_row, (16f * density).toInt(), 0, 0, 0)
     }
 
     /** Larger bitmaps for 5×2 / 5×3 so icons look sharp when layout expands. */
