@@ -72,7 +72,7 @@ import kotlin.math.min
 import kotlinx.coroutines.launch
 
 /** Targets from the title-bar celestial menu / body switcher. */
-enum class CelestialBody { Sun, Moon, SpaceWeather, Earthquakes, Storms }
+enum class CelestialBody { Sun, Moon, SpaceWeather, Earthquakes, Storms, Tides }
 
 /** Day offsets relative to today: yesterday … +5 days. */
 private val DayOffsets = (-1..5).toList()

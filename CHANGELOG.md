@@ -7,6 +7,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Tide diagram screen reachable from the hamburger menu and the sun/moon/space/quakes selector: hourly height curve, high/low table, station coordinates and NOAA station code
+- The nearest NOAA tide station is chosen when a city is added or opened and remembered for that city; saved cities can be switched from the tide screen
+- Today's tides appear as a compact 2×2 low/high table under Current Conditions when a city has a nearby station
+
 ## [1.1.13] — 2026-11-21
 
 ### Changed

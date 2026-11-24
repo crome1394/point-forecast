@@ -36,6 +36,8 @@ class PreferencesRepository(private val context: Context) {
     private val keyIntervalMin = intPreferencesKey("update_interval_minutes")
     private val keyActiveId = stringPreferencesKey("active_location_id")
     private val keyFavorites = stringPreferencesKey("favorites_json")
+    /** JSON object: saved-location id → nearest tide station choice. */
+    private val keyTideStations = stringPreferencesKey("tide_stations_json")
     private val keyLastSnapshot = stringPreferencesKey("last_snapshot_json")
     private val keyUseFahrenheit = booleanPreferencesKey("use_fahrenheit")
     /** "us" or "metric". Supersedes [keyUseFahrenheit] when present. */
@@ -245,6 +247,41 @@ class PreferencesRepository(private val context: Context) {
     val activeLocationId: Flow<String?> =
         context.dataStore.data.map { it[keyActiveId] }
 
+    /** Remembered nearest tide station for each city id. */
+    val tideStations: Flow<Map<String, TideStationChoice>> =
+        context.dataStore.data.map { prefs ->
+            val raw = prefs[keyTideStations] ?: return@map emptyMap()
+            runCatching {
+                json.decodeFromString<Map<String, TideStationChoice>>(raw)
+            }.getOrDefault(emptyMap())
+        }
+
+    suspend fun setTideStation(locationId: String, choice: TideStationChoice) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[keyTideStations]?.let { raw ->
+                runCatching {
+                    json.decodeFromString<MutableMap<String, TideStationChoice>>(raw)
+                }.getOrNull()
+            } ?: LinkedHashMap()
+            current[locationId] = choice
+            prefs[keyTideStations] = json.encodeToString(current.toMap())
+        }
+    }
+
+    suspend fun getTideStationOnce(locationId: String): TideStationChoice? =
+        tideStations.first()[locationId]
+
+    suspend fun removeTideStation(locationId: String) {
+        context.dataStore.edit { prefs ->
+            val raw = prefs[keyTideStations] ?: return@edit
+            val current = runCatching {
+                json.decodeFromString<MutableMap<String, TideStationChoice>>(raw)
+            }.getOrNull() ?: return@edit
+            current.remove(locationId)
+            prefs[keyTideStations] = json.encodeToString(current.toMap())
+        }
+    }
+
     val lastSnapshot: Flow<WeatherSnapshot?> =
         context.dataStore.data.map { prefs ->
             val raw = prefs[keyLastSnapshot] ?: return@map null
@@ -397,6 +434,7 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun removeFavorite(id: String) {
         saveFavorites(favorites.first().filterNot { it.id == id })
+        removeTideStation(id)
     }
 
     /** Rename a saved city; returns the updated location or null if not found. */
@@ -577,6 +615,7 @@ class PreferencesRepository(private val context: Context) {
             "SpaceWeather",
             "Earthquakes",
             "Storms",
+            "Tides",
             "AddCity",
         )
 
@@ -625,6 +664,7 @@ class PreferencesRepository(private val context: Context) {
             "SpaceWeather" -> "Space Weather"
             "Earthquakes" -> "Earthquakes"
             "Storms" -> "Severe Weather"
+            "Tides" -> "Tides"
             "AddCity" -> "Add City"
             else -> id
         }

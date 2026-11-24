@@ -12,11 +12,13 @@ import com.crome.forecastpoint.data.PreferencesRepository
 import com.crome.forecastpoint.data.SavedLocation
 import com.crome.forecastpoint.data.SevereWeatherService
 import com.crome.forecastpoint.data.SpaceWeatherService
+import com.crome.forecastpoint.data.TideService
 import com.crome.forecastpoint.data.UnitSystem
 import com.crome.forecastpoint.data.WeatherRepository
 import com.crome.forecastpoint.data.WeatherSnapshot
 import com.crome.forecastpoint.worker.WeatherUpdateScheduler
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = WeatherRepository(app.applicationContext)
@@ -49,6 +52,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
             PreferencesRepository.DEFAULT_INTERVAL_MIN,
         )
     val activeLocationId = prefs.activeLocationId.stateIn(viewModelScope, share, null)
+    val tideStations = prefs.tideStations.stateIn(viewModelScope, share, emptyMap())
     val titleBarAtBottom = prefs.titleBarAtBottom.stateIn(viewModelScope, share, false)
     val widgetShowHighLow = prefs.widgetShowHighLow.stateIn(viewModelScope, share, false)
     val mapSearchAtBottom = prefs.mapSearchAtBottom.stateIn(viewModelScope, share, false)
@@ -114,6 +118,12 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private val _severeWeatherLoading = MutableStateFlow(false)
     val severeWeatherLoading: StateFlow<Boolean> = _severeWeatherLoading.asStateFlow()
 
+    private val _tideResult = MutableStateFlow<TideService.TideResult?>(null)
+    val tideResult: StateFlow<TideService.TideResult?> = _tideResult.asStateFlow()
+
+    private val _tidesLoading = MutableStateFlow(false)
+    val tidesLoading: StateFlow<Boolean> = _tidesLoading.asStateFlow()
+
     private val _searchResults = MutableStateFlow<List<GeocodeResult>>(emptyList())
     val searchResults: StateFlow<List<GeocodeResult>> = _searchResults.asStateFlow()
 
@@ -123,6 +133,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private var searchJob: Job? = null
     private var earthquakeJob: Job? = null
     private var severeWeatherJob: Job? = null
+    private var tidesJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -154,6 +165,38 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /**
+     * Load the tide diagram for the active city from its remembered nearest station.
+     * Uses the same NOAA CO-OPS TideService as the hourly forecast — no extra API client.
+     */
+    fun ensureTides() {
+        tidesJob?.cancel()
+        tidesJob = viewModelScope.launch {
+            val loc = prefs.getActiveLocationOnce() ?: return@launch
+            _tidesLoading.value = true
+            val choice = runCatching { repo.ensureTideStation(loc) }.getOrNull()
+            _tideResult.value = if (choice == null) {
+                null
+            } else {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        repo.tideService.fetchForStation(
+                            choice.toTideStation(),
+                            loc.latitude,
+                            loc.longitude,
+                        )
+                    }.getOrNull()
+                }
+            }
+            _tidesLoading.value = false
+        }
+    }
+
+    private fun clearTides() {
+        tidesJob?.cancel()
+        _tideResult.value = null
     }
 
     /** Load SWPC only when the user opens Space Weather or the Hourly screen. */
@@ -374,6 +417,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectFavorite(loc: SavedLocation) {
+        clearTides()
         viewModelScope.launch {
             runCatching { repo.selectLocation(loc, fetch = true, saveFavorite = true) }
         }
@@ -381,6 +425,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Switch active city from a hazard screen picker (favorites or current non-favorite). */
     fun selectHazardCity(loc: SavedLocation) {
+        clearTides()
         viewModelScope.launch {
             runCatching {
                 repo.selectLocation(loc, fetch = true, saveFavorite = loc.isFavorite)
@@ -389,6 +434,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectGeocode(result: GeocodeResult) {
+        clearTides()
         viewModelScope.launch {
             runCatching {
                 repo.useCoordinates(result.latitude, result.longitude, result.name, saveFavorite = true)
@@ -402,6 +448,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         repo.reverseGeocode(latitude, longitude)
 
     fun confirmMapLocation(result: GeocodeResult) {
+        clearTides()
         viewModelScope.launch {
             runCatching {
                 repo.useCoordinates(
@@ -415,6 +462,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun useDeviceLocation(location: Location, label: String = "Current Location") {
+        clearTides()
         viewModelScope.launch {
             runCatching {
                 repo.useCoordinates(location.latitude, location.longitude, label, saveFavorite = false)
@@ -423,6 +471,7 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun removeFavorite(id: String) {
+        clearTides()
         viewModelScope.launch {
             runCatching {
                 val remaining = favorites.value.filterNot { it.id == id }
