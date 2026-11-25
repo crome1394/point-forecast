@@ -258,4 +258,69 @@ class TideGraphDataTest {
         assertTrue(events.lows.isEmpty())
         assertTrue(events.highs.isEmpty())
     }
+
+    @Test
+    fun tideTableRowsPairEachLowWithTheFollowingHigh() {
+        val extremes = listOf(
+            TideGraphData.Extreme(epochHour = hour(0, 4), heightFt = 0.2, type = "LOW"),
+            TideGraphData.Extreme(epochHour = hour(0, 10), heightFt = 3.0, type = "HIGH"),
+            TideGraphData.Extreme(epochHour = hour(0, 16), heightFt = 0.1, type = "LOW"),
+            TideGraphData.Extreme(epochHour = hour(0, 22), heightFt = 2.5, type = "HIGH"),
+        )
+
+        val rows = TideGraphData.tideTableRows(extremes)
+
+        assertEquals(listOf(hour(0, 4), hour(0, 16)), rows.map { it.low?.epochHour })
+        assertEquals(listOf(hour(0, 10), hour(0, 22)), rows.map { it.high?.epochHour })
+    }
+
+    @Test
+    fun tideTableRowsKeepHighAheadOfFollowingLowWhenMorningLowIsMissing() {
+        val events = TideGraphData.TodayTideEvents(
+            lows = listOf(TideGraphData.Extreme(epochHour = hour(0, 16), heightFt = 0.06, type = "LOW")),
+            highs = listOf(
+                TideGraphData.Extreme(epochHour = hour(0, 10), heightFt = 1.03, type = "HIGH"),
+                TideGraphData.Extreme(epochHour = hour(0, 22), heightFt = 0.81, type = "HIGH"),
+            ),
+        )
+
+        val rows = events.rows()
+
+        assertEquals(2, rows.size)
+        assertEquals(null, rows[0].low?.epochHour)
+        assertEquals(hour(0, 10), rows[0].high?.epochHour)
+        assertEquals(hour(0, 16), rows[1].low?.epochHour)
+        assertEquals(hour(0, 22), rows[1].high?.epochHour)
+    }
+
+    @Test
+    fun tideTableRowsLeaveUnpairedExtremesInTheirOwnCells() {
+        val events = TideGraphData.TodayTideEvents(
+            lows = listOf(
+                TideGraphData.Extreme(epochHour = hour(0, 4), heightFt = 0.2, type = "LOW"),
+                TideGraphData.Extreme(epochHour = hour(0, 16), heightFt = 0.1, type = "LOW"),
+            ),
+            highs = emptyList(),
+        )
+
+        val rows = events.rows()
+
+        assertEquals(listOf(hour(0, 4), hour(0, 16)), rows.map { it.low?.epochHour })
+        assertTrue(rows.all { it.high == null })
+    }
+
+    @Test
+    fun tideTableRowsSortExtremesBeforePairing() {
+        val extremes = listOf(
+            TideGraphData.Extreme(epochHour = hour(0, 22), heightFt = 2.5, type = "HIGH"),
+            TideGraphData.Extreme(epochHour = hour(0, 4), heightFt = 0.2, type = "LOW"),
+            TideGraphData.Extreme(epochHour = hour(0, 16), heightFt = 0.1, type = "LOW"),
+            TideGraphData.Extreme(epochHour = hour(0, 10), heightFt = 3.0, type = "HIGH"),
+        )
+
+        val rows = TideGraphData.tideTableRows(extremes)
+
+        assertEquals(listOf(hour(0, 4), hour(0, 16)), rows.map { it.low?.epochHour })
+        assertEquals(listOf(hour(0, 10), hour(0, 22)), rows.map { it.high?.epochHour })
+    }
 }

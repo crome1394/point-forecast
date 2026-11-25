@@ -408,15 +408,16 @@ private fun TodayTideTable(
                 modifier = Modifier.padding(top = 2.dp),
             )
             Spacer(Modifier.height(8.dp))
-            repeat(maxOf(events.lows.size, events.highs.size)) { index ->
+            val rows = events.rows()
+            repeat(rows.size) { index ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                     Box(Modifier.weight(1f)) {
-                        events.lows.getOrNull(index)?.let { low ->
+                        rows[index].low?.let { low ->
                             TideEventCell(low, "Low", Color(0xFF4DD0E1), timeFmt, storedMetric, metricUnits)
                         }
                     }
                     Box(Modifier.weight(1f)) {
-                        events.highs.getOrNull(index)?.let { high ->
+                        rows[index].high?.let { high ->
                             TideEventCell(high, "High", Amber, timeFmt, storedMetric, metricUnits)
                         }
                     }

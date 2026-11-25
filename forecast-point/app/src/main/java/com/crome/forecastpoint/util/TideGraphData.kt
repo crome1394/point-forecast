@@ -29,7 +29,31 @@ object TideGraphData {
     data class TodayTideEvents(
         val lows: List<Extreme>,
         val highs: List<Extreme>,
+    ) {
+        fun rows(): List<TideTableRow> = tideTableRows(lows + highs)
+    }
+
+    data class TideTableRow(
+        val low: Extreme?,
+        val high: Extreme?,
     )
+
+    fun tideTableRows(extremes: List<Extreme>): List<TideTableRow> {
+        val rows = ArrayList<TideTableRow>()
+        extremes.sortedBy { it.epochHour }.forEach { extreme ->
+            if (extreme.type == "LOW") {
+                rows += TideTableRow(low = extreme, high = null)
+            } else {
+                val last = rows.lastOrNull()
+                if (last != null && last.low != null && last.high == null) {
+                    rows[rows.lastIndex] = last.copy(high = extreme)
+                } else {
+                    rows += TideTableRow(low = null, high = extreme)
+                }
+            }
+        }
+        return rows
+    }
 
     fun splitExtremes(extremes: List<Extreme>): TodayTideEvents = TodayTideEvents(
         lows = extremes.filter { it.type == "LOW" },
